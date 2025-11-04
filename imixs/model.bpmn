@@ -1,0 +1,4 @@
+A submits form → task: "Submitted"
+B approves → task: "B Approved"
+C makes final decision → task: "Final Decision"
+Then → "Completed" or "Rejected"
