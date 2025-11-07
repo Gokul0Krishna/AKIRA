@@ -6,6 +6,7 @@ from activities import letter_gen, approvals, notifications
 class ApprovalWorkflow:
     @workflow.run
     async def run(self, form_data: dict):
+
         # Step 1: Generate letter using AI
         letter = await workflow.execute_activity(
             letter_gen.generate_letter,
@@ -20,8 +21,11 @@ class ApprovalWorkflow:
             start_to_close_timeout=timedelta(seconds=20)
         )
         if not b_approved:
-            await workflow.execute_activity(notifications.notify, ("A", "Rejected by B"))
-            return "Rejected"
+            await workflow.execute_activity(
+                notifications.notify, ("A", "Rejected by B"),
+                start_to_close_timeout=timedelta(seconds=10)
+            )
+            return "Rejected by B"
 
         # Step 3: Approval from C
         c_approved = await workflow.execute_activity(
@@ -30,20 +34,27 @@ class ApprovalWorkflow:
             start_to_close_timeout=timedelta(seconds=20)
         )
         if not c_approved:
-            await workflow.execute_activity(notifications.notify, ("A", "Rejected by C"))
-            return "Rejected"
+            for person in ["A", "B"]:
+                await workflow.execute_activity(
+                    notifications.notify,
+                    (person, "Rejected by C"),
+                    start_to_close_timeout=timedelta(seconds=10)
+                )
+            return "Rejected by C"
 
-        # Step 4: Send summary to D for final decision
+        # Step 4: Final decision from D
         d_decision = await workflow.execute_activity(
             approvals.request_final_decision,
             "D", letter,
             start_to_close_timeout=timedelta(seconds=20)
         )
 
-        # Step 5: Notify A
-        await workflow.execute_activity(
-            notifications.notify,
-            ("A", f"Final decision from D: {d_decision}")
-        )
+        # Step 5: Notify everyone
+        for person in ["A", "B", "C"]:
+            await workflow.execute_activity(
+                notifications.notify,
+                (person, f"Final decision from D: {d_decision}"),
+                start_to_close_timeout=timedelta(seconds=10)
+            )
 
         return f"Workflow completed with D's decision: {d_decision}"
