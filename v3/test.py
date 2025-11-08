@@ -32,7 +32,7 @@ def authenticate():
         else:
             print("Starting authentication flow...")
             print("A browser window will open. Please sign in and grant permissions.")
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file('v3/credentials.json       ', SCOPES)
             creds = flow.run_local_server(port=0)
         
         # Save credentials for next run
