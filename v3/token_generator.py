@@ -38,9 +38,9 @@ def authenticate():
         # Save credentials for next run
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
-        print("✓ Authentication successful! token.json saved.")
+        print("Authentication successful! token.json saved.")
     else:
-        print("✓ Already authenticated. Using existing token.json")
+        print("Already authenticated. Using existing token.json")
     
     return creds
 
