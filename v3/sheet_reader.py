@@ -20,7 +20,7 @@ def read_form_responses():
     
     values = result.get('values', [])
     if values:
-        print(f"Found {len(values)} rows (including header)")
+        print(f" Found {len(values)} rows (including header)")
         headers = values[0]
     print("\nHeaders:", headers)
     
