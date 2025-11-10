@@ -1,40 +1,19 @@
-from google_auth import get_gmail_service
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from docx import Document
+from datetime import datetime
+from dotenv import load_dotenv
+import os
+import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import base64
+from email.mime.application import MIMEApplication
 
-class EmailSender:
-    def __init__(self):
-        self.service = get_gmail_service()
-    
-    def send_email(self, to, subject, body_html, body_text=None):
-        """Send an email"""
-        try:
-            message = MIMEMultipart('alternative')
-            message['To'] = to
-            message['Subject'] = subject
-            
-            # Add plain text version (fallback)
-            if body_text:
-                part1 = MIMEText(body_text, 'plain')
-                message.attach(part1)
-            
-            # Add HTML version
-            part2 = MIMEText(body_html, 'html')
-            message.attach(part2)
-            
-            # Encode message
-            raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-            
-            # Send
-            result = self.service.users().messages().send(
-                userId='me',
-                body={'raw': raw}
-            ).execute()
-            
-            print(f"✓ Email sent to {to} (Message ID: {result['id']})")
-            return result
-            
-        except Exception as e:
-            print(f"✗ Error sending email to {to}: {str(e)}")
-            return None
+load_dotenv()
+SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
+
+SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets.readonly',
+    'https://www.googleapis.com/auth/gmail.send'
+]
