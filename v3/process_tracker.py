@@ -115,14 +115,14 @@ def read_and_send():
     doc = Document()
     doc.add_heading("REVA UNIVERSITY", level=1)
     doc.add_paragraph("SCHOOL OF ARCHITECTURE\n")
-    doc.add_paragraph(f"Date: {datetime.now().strftime('%d-%m-%Y')}\n")
+    doc.add_paragraph(f"Date: {datetime.datetime.now().strftime('%d-%m-%Y')}\n")
     doc.add_paragraph("Permission Letter for Case Study\n", style='Intense Quote')
 
     body = (
         f"To whomsoever it may concern\n\n"
         f"The bearer of this letter, {matched_rows['Name'][0]} bearing SRN {matched_rows['SRN'][0]} "
         f"is the bonafide student of School of Architecture, REVA University, "
-        f"Bangalore studying {matched_rows['Semester'][0]} semester B.Arch. for the academic year {datetime.now().strftime('%Y')}.\n\n"
+        f"Bangalore studying {matched_rows['Semester'][0]} semester B.Arch. for the academic year {datetime.datetime.now().strftime('%Y')}.\n\n"
         f"As a part of their curriculum for {matched_rows['Subject'][0]}, he is visiting below mentioned places "
         f"between {matched_rows['from date'][0]} and {matched_rows['to date'][0]}.\n\n"
         f"{matched_rows['Places to visit'][0]}\n\n"
@@ -140,9 +140,9 @@ def read_and_send():
     )
 
     doc.add_paragraph(body)
-    filename = f"CaseStudy_Letter_{srn}-{tor}-{time}.docx"
+    filename = f"CaseStudy_Letter_{srn}_{tor}.docx"
     doc.save(filename)
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    creds = Credentials.from_authorized_user_file('v3/token.json', SCOPES)
     service = build('gmail', 'v1', credentials=creds)
 
     # Email details
