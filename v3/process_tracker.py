@@ -172,5 +172,5 @@ def read_and_send():
         print(e)
 
 if __name__ == '__main__':
-    # post_latest_event()
+    post_latest_event()
     read_and_send()
