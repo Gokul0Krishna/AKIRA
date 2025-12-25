@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat {{ chat_id }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Home</a>
+
+        <div class="chat-container card">
+            <div class="messages-area" id="messages">
+                {% for msg in messages %}
+                <div class="message {% if msg['sender'] == 'User' %}user{% else %}other{% endif %}">
+                    <div>{{ msg['message'] }}</div>
+                    <div class="message-meta">{{ msg['timestamp'] }}</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <form method="post" class="input-area">
+                <input type="text" name="message" class="message-input" placeholder="Type your message..." required
+                    autofocus autocomplete="off">
+                <button type="submit" class="btn">Send</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Scroll to bottom of chat
+        const messagesDiv = document.getElementById('messages');
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    </script>
+</body>
+
+</html>

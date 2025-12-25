@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akira Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Akira Chat</h1>
+        </header>
+        
+        <div class="card">
+            <form action="/" method="post">
+                <button type="submit" class="btn" style="width: 100%;">+ Start New Chat</button>
+            </form>
+
+            <h2 style="margin-top: 2rem; font-size: 1.25rem; color: var(--secondary-text);">Previous Chats</h2>
+            
+            {% if chats %}
+            <ul class="chat-list">
+                {% for chat in chats %}
+                <li class="chat-item">
+                    <a href="/{{ chat['chatid'] }}" class="chat-link">
+                        Chat ID: {{ chat['chatid'] }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p style="color: var(--secondary-text); text-align: center; margin-top: 2rem;">No chats yet. Start one!</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
