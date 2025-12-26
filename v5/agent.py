@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 
 # Load environment variables
 load_dotenv()
@@ -24,6 +25,8 @@ class GraphState(TypedDict):
     sanity_check: Dict[str, Any]
     sanity_issues: List[str]
     regeneration_count: int
+    last_message: str
+    last_user_message: str
 
 class WorkflowAgent:
     def __init__(self):
@@ -34,7 +37,35 @@ class WorkflowAgent:
             base_url="https://openrouter.ai/api/v1",
             temperature=0.7
         )
+        self.checkpointer = MemorySaver()
         self.app = self._build_graph()
+
+    def run_step(self, user_input: str, thread_id: str):
+        config = {"configurable": {"thread_id": thread_id}}
+        
+        # Check current state
+        state = self.app.get_state(config)
+        
+        if not state.values:
+            # First run
+            initial_state = {
+                "user_request": user_input,
+                "question_iteration": 0,
+                "user_answers": {}
+            }
+            # Run until interrupt (collect_answers) or End
+            for event in self.app.stream(initial_state, config=config):
+                pass
+        else:
+            # Resume with user input
+            self.app.update_state(config, {"last_user_message": user_input})
+            # Resume execution
+            for event in self.app.stream(None, config=config):
+                pass
+                
+        # Get final state to retrieve response
+        final_state = self.app.get_state(config)
+        return final_state.values.get("last_message", "Processing completed.")
 
     def _analyze_request(self, state: GraphState):
         """
@@ -162,10 +193,16 @@ Return ONLY the JSON, no other text.
             questions = questions_data.get("questions", [])
             
             print(f"\n📋 Generated {len(questions)} questions")
+
+            # Format questions for user
+            question_text = "I have some clarifying questions:\n\n"
+            for q in questions:
+                question_text += f"- {q['question']}\n"
             
             return {
                 "clarifying_questions": questions,
-                "question_iteration": state.get("question_iteration", 0) + 1
+                "question_iteration": state.get("question_iteration", 0) + 1,
+                "last_message": question_text
             }
             
         except Exception as e:
@@ -194,55 +231,56 @@ Return ONLY the JSON, no other text.
             
             return {
                 "clarifying_questions": fallback_questions,
-                "question_iteration": state.get("question_iteration", 0) + 1
+                "question_iteration": state.get("question_iteration", 0) + 1,
+                "last_message": "Could you please provide: 1. Form fields needed? 2. Document requirements? 3. Time limits?"
             }
 
     def _collect_user_answers(self, state: GraphState):
         """
-        Collect answers from user for clarifying questions
+        Parse user input into answers
         """
         questions = state.get("clarifying_questions", [])
+        user_input = state.get("last_user_message", "")
         existing_answers = state.get("user_answers", {})
         
-        print(f"\n{'='*80}")
-        print("📝 CLARIFYING QUESTIONS")
-        print(f"{'='*80}\n")
+        print("\n🤖 Parsing user answers...")
         
-        print("Please answer the following to help design your workflow:\n")
-        
-        answers = existing_answers.copy()
-        
-        for question in questions:
-            q_id = question["id"]
-            q_text = question["question"]
-            required = question.get("required", False)
+        # Use LLM to map user input to questions
+        prompt = f"""
+You are mapping user text responses to specific questions.
+
+QUESTIONS:
+{json.dumps(questions, indent=2)}
+
+USER INPUT:
+"{user_input}"
+
+Map the user's input to the question IDs. Return valid JSON:
+{{
+  "answers": {{
+    "q1": "extracted answer",
+    "q2": "extracted answer"
+  }}
+}}
+"""
+        try:
+            messages = [HumanMessage(content=prompt)]
+            response = self.model.invoke(messages)
             
-            # Skip if already answered
-            if q_id in answers and answers[q_id]:
-                continue
+            # naive cleanup
+            txt = response.content.strip().replace("```json","").replace("```","")
+            parsed = json.loads(txt)
+            new_answers = parsed.get("answers", {})
             
-            print(f"{'='*80}")
-            print(f"Question {q_id.upper()}: {q_text}")
-            if required:
-                print("(Required)")
-            else:
-                print("(Optional - press Enter to skip)")
-            print(f"{'='*80}")
+            # Merge
+            answers = existing_answers.copy()
+            answers.update(new_answers)
             
-            answer = input("\nYour answer: ").strip()
+            return {"user_answers": answers}
             
-            if answer or not required:
-                answers[q_id] = answer
-            elif required and not answer:
-                print("⚠️  This question is required. Please provide an answer.")
-                answer = input("Your answer: ").strip()
-                answers[q_id] = answer
-        
-        print(f"\n{'='*80}")
-        print("✅ Answers collected")
-        print(f"{'='*80}\n")
-        
-        return {"user_answers": answers}
+        except Exception:
+             # Fallback: dump everything into first unanswered or just generic
+             return {"user_answers": existing_answers}
 
     def _validate_user_answers(self, state: GraphState):
         """
@@ -658,7 +696,10 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
         
         print("\n" + "="*80)
         
-        return state
+        return {
+            "master_json": master_json,
+            "last_message": f"Workflow Generation Complete!\n\nName: {metadata.get('workflow_name')}\nDescription: {metadata.get('description')}"
+        }
 
     def _should_ask_more_questions(self, state: GraphState) -> str:
         """
@@ -718,7 +759,10 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
         graph.add_edge("create_master", "display")
         graph.add_edge("display", END)
         
-        return graph.compile()
+        return graph.compile(
+            checkpointer=self.checkpointer,
+            interrupt_before=["collect_answers"]
+        )
 
     def run(self, initial_state: GraphState):
         return self.app.invoke(initial_state)
