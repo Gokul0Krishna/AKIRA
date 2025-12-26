@@ -27,6 +27,7 @@ class GraphState(TypedDict):
     regeneration_count: int
     last_message: str
     last_user_message: str
+    chat_id: str
 
 class WorkflowAgent:
     def __init__(self):
@@ -51,7 +52,8 @@ class WorkflowAgent:
             initial_state = {
                 "user_request": user_input,
                 "question_iteration": 0,
-                "user_answers": {}
+                "user_answers": {},
+                "chat_id": thread_id
             }
             # Run until interrupt (collect_answers) or End
             for event in self.app.stream(initial_state, config=config):
@@ -117,7 +119,7 @@ class WorkflowAgent:
             "approval_chain": approval_chain
         }
         
-        print("\n🔍 INITIAL ANALYSIS COMPLETE")
+        print("\n[ANALYSIS] INITIAL ANALYSIS COMPLETE")
         print(f"   Workflow: {workflow_title}")
         print(f"   Approval Chain: {' → '.join([r.title() for r in approval_sequence])}")
         
@@ -136,7 +138,7 @@ class WorkflowAgent:
         approval_chain = state.get("approval_chain", [])
         previous_answers = state.get("user_answers", {})
         
-        print("\n🤖 LLM is generating clarifying questions...")
+        print("\n[LLM] Generating clarifying questions...")
         
         prompt = f"""
 You are a workflow design expert helping to create a Microsoft 365 automated workflow.
@@ -192,7 +194,7 @@ Return ONLY the JSON, no other text.
             questions_data = json.loads(response_text)
             questions = questions_data.get("questions", [])
             
-            print(f"\n📋 Generated {len(questions)} questions")
+            print(f"\n[INFO] Generated {len(questions)} questions")
 
             # Format questions for user
             question_text = "I have some clarifying questions:\n\n"
@@ -206,7 +208,7 @@ Return ONLY the JSON, no other text.
             }
             
         except Exception as e:
-            print(f"\n⚠️  LLM question generation failed: {e}")
+            print(f"\n[WARNING] LLM question generation failed: {e}")
             # Fallback questions
             fallback_questions = [
                 {
@@ -243,7 +245,7 @@ Return ONLY the JSON, no other text.
         user_input = state.get("last_user_message", "")
         existing_answers = state.get("user_answers", {})
         
-        print("\n🤖 Parsing user answers...")
+        print("\n[LLM] Parsing user answers...")
         
         # Use LLM to map user input to questions
         prompt = f"""
@@ -290,7 +292,7 @@ Map the user's input to the question IDs. Return valid JSON:
         answers = state.get("user_answers", {})
         workflow_analysis = state.get("workflow_analysis", {})
         
-        print("\n🤖 LLM is validating your answers...")
+        print("\n[LLM] Validating your answers...")
         
         prompt = f"""
 You are validating user responses for workflow design.
@@ -336,16 +338,16 @@ Return ONLY the JSON, no other text.
             validation = json.loads(response_text)
             
             if validation.get("valid") and validation.get("can_proceed"):
-                print("   ✅ Validation passed - proceeding to generation")
+                print("   [VALIDATION] Validation passed - proceeding to generation")
             else:
-                print("   ⚠️  More information needed")
+                print("   [WARNING] More information needed")
                 if validation.get("missing_info"):
                     print(f"   Missing: {', '.join(validation['missing_info'])}")
             
             return {"validation_result": validation}
             
         except Exception as e:
-            print(f"\n⚠️  Validation failed: {e}")
+            print(f"\n[ERROR] Validation failed: {e}")
             # Default to valid if LLM fails
             return {
                 "validation_result": {
@@ -364,7 +366,7 @@ Return ONLY the JSON, no other text.
         user_answers = state.get("user_answers", {})
         approval_chain = state.get("approval_chain", [])
         
-        print("\n🤖 LLM is enriching workflow analysis...")
+        print("\n[LLM] Enriching workflow analysis...")
         
         prompt = f"""
 You are a workflow architect. Based on the user's answers, create a comprehensive workflow specification.
@@ -431,12 +433,12 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
                 "email_platform": "Office 365 Outlook"
             }
             
-            print("   ✅ Workflow analysis enriched")
+            print("   [INFO] Workflow analysis enriched")
             
             return {"workflow_analysis": enriched_analysis}
             
         except Exception as e:
-            print(f"\n⚠️  Enrichment failed: {e}, using basic analysis")
+            print(f"\n[ERROR] Enrichment failed: {e}, using basic analysis")
             # Return basic structure
             return {
                 "workflow_analysis": {
@@ -507,7 +509,7 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
             ])
             question_num += 2
         
-        print(f"\n📋 Form Schema: {len(form_schema['questions'])} questions")
+        print(f"\n[SCHEMA] Form Schema: {len(form_schema['questions'])} questions")
         
         return {"form_schema": form_schema}
 
@@ -555,7 +557,7 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
             "columns": columns
         }
         
-        print(f"\n📊 Excel Schema: {len(columns)} columns")
+        print(f"\n[SCHEMA] Excel Schema: {len(columns)} columns")
         
         return {"excel_schema": excel_schema}
 
@@ -636,7 +638,7 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
             "connector": "Office 365 Outlook"
         })
         
-        print(f"\n⚙️  Workflow: {len(workflow['steps'])} steps")
+        print(f"\n[INFO] Workflow: {len(workflow['steps'])} steps")
         
         return {"workflow": workflow}
 
@@ -671,34 +673,39 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
             "power_automate_workflow": workflow
         }
         
-        print("\n✅ Master JSON generated")
+        print("\n[INFO] Master JSON generated")
         
         return {"master_json": master_json}
 
     def _display_output(self, state: GraphState):
         """
-        Display master JSON
+        Save master JSON to file and prepare message
         """
         master_json = state.get("master_json", {})
+        chat_id = state.get("chat_id", "workflow")
         
         print("\n" + "="*80)
-        print("✅ WORKFLOW GENERATION COMPLETE")
+        print("[SUCCESS] WORKFLOW GENERATION COMPLETE")
         print("="*80)
         
         metadata = master_json.get("metadata", {})
-        print(f"\n📋 {metadata.get('workflow_name', '')}")
-        print(f"📝 {metadata.get('description', '')}")
+        print(f"\n[TITLE] {metadata.get('workflow_name', '')}")
+        print(f"[DESC] {metadata.get('description', '')}")
         
-        print("\n📄 MASTER JSON OUTPUT:")
-        print("="*80 + "\n")
-        
-        print(json.dumps(master_json, indent=2))
+        # Save to file
+        filename = f"{chat_id}.json"
+        try:
+            with open(filename, 'w') as f:
+                json.dump(master_json, f, indent=2)
+            print(f"\n[SAVE] Master JSON saved to: {filename}")
+        except Exception as e:
+            print(f"\n[ERROR] Failed to save JSON file: {e}")
         
         print("\n" + "="*80)
         
         return {
             "master_json": master_json,
-            "last_message": f"Workflow Generation Complete!\n\nName: {metadata.get('workflow_name')}\nDescription: {metadata.get('description')}"
+            "last_message": f"Workflow Generation Complete!\n\nName: {metadata.get('workflow_name')}\nDescription: {metadata.get('description')}\n\nFile saved: {filename}"
         }
 
     def _should_ask_more_questions(self, state: GraphState) -> str:
@@ -709,13 +716,13 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
         iteration = state.get("question_iteration", 0)
         
         if validation.get("can_proceed", True):
-            print("\n✅ Sufficient information collected")
+            print("\n[INFO] Sufficient information collected")
             return "proceed"
         elif iteration >= 2:
-            print("\n⚠️  Max question iterations reached, proceeding anyway")
+            print("\n[WARNING] Max question iterations reached, proceeding anyway")
             return "proceed"
         else:
-            print("\n🔄 Need more information...")
+            print("\n[INFO] Need more information...")
             return "ask_more"
 
     def _build_graph(self):

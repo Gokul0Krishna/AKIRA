@@ -21,6 +21,15 @@ def index():
     if request.method == 'POST':
         # Start a new chat
         new_chat_id = str(uuid.uuid4())
+        
+        # Insert initial greeting
+        conn = get_db_connection()
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        conn.execute('INSERT INTO chatlog (chatid, message, timestamp, sender) VALUES (?, ?, ?, ?)',
+                     (new_chat_id, "what are we building today?", timestamp, 'System'))
+        conn.commit()
+        conn.close()
+        
         return redirect(url_for('chat_route', chat_id=new_chat_id))
     
     conn = get_db_connection()

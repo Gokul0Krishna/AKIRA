@@ -13,7 +13,9 @@ cursor.execute('''
     CREATE TABLE IF NOT EXISTS chatlog (
         chatid TEXT,
         message TEXT,
-        timestamp TEXT
+        timestamp TEXT,
+        sender TEXT,
+        workflow_generated BOOLEAN DEFAULT FALSE
     )
 ''')
 
