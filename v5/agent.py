@@ -28,6 +28,7 @@ class GraphState(TypedDict):
     last_message: str
     last_user_message: str
     chat_id: str
+    current_question_index: int
 
 class WorkflowAgent:
     def __init__(self):
@@ -53,7 +54,8 @@ class WorkflowAgent:
                 "user_request": user_input,
                 "question_iteration": 0,
                 "user_answers": {},
-                "chat_id": thread_id
+                "chat_id": thread_id,
+                "current_question_index": 0
             }
             # Run until interrupt (collect_answers) or End
             for event in self.app.stream(initial_state, config=config):
@@ -159,158 +161,83 @@ Return ONLY valid JSON:
 
     def _generate_clarifying_questions(self, state: GraphState):
         """
-        Use LLM to generate clarifying questions about the workflow
+        Use LLM to generate clarifying questions or select current one
         """
         analysis = state.get("workflow_analysis", {})
         workflow_title = analysis.get("workflow_title", "")
         approval_chain = state.get("approval_chain", [])
         previous_answers = state.get("user_answers", {})
+        questions = state.get("clarifying_questions", [])
+        index = state.get("current_question_index", 0)
         
-        print("\n[LLM] Generating clarifying questions...")
-        
-        prompt = f"""
-You are a workflow design expert helping to create a Microsoft 365 automated workflow.
+        # 1. Generate new batch if empty
+        if not questions:
+            print("\n[LLM] Generating a new batch of clarifying questions...")
+            prompt = f"""
+You are a workflow design expert.
+WORKFLOW: {workflow_title}
+CHAIN: {' → '.join([a['approver_role'] for a in approval_chain])}
 
-WORKFLOW INFORMATION:
-- Title: {workflow_title}
-- Approval Chain: {' → '.join([a['approver_role'] for a in approval_chain])}
-- Requirements: {', '.join(analysis.get('additional_requirements', []))}
-
-Previous Answers (if any): {json.dumps(previous_answers, indent=2) if previous_answers else "None"}
-
-Generate 3-5 SPECIFIC clarifying questions to fully understand this workflow. Focus on:
-1. What information should end users provide in the form?
-2. Any special validation rules or constraints?
-3. What happens in edge cases (withdrawal, timeout, etc.)?
-4. Document requirements (if any)?
-5. Special notification requirements?
-
-Return ONLY valid JSON in this format:
+Generate 3-5 SPECIFIC clarifying questions. 
+Return ONLY valid JSON:
 {{
   "questions": [
-    {{
-      "id": "q1",
-      "question": "What specific information should students provide about their leave (dates, reason, duration)?",
-      "category": "form_fields",
-      "required": true
-    }},
-    {{
-      "id": "q2",
-      "question": "Should there be a maximum leave duration limit?",
-      "category": "business_rules",
-      "required": false
-    }}
+    {{"id": "q1", "question": "...", "category": "form_fields", "required": true}},
+    ...
   ]
 }}
-
-Return ONLY the JSON, no other text.
 """
-        
-        try:
-            messages = [
-                SystemMessage(content="You are a workflow design assistant. Always respond with valid JSON only."),
-                HumanMessage(content=prompt)
-            ]
+            try:
+                messages = [HumanMessage(content=prompt)]
+                response = self.model.invoke(messages)
+                txt = response.content.strip().replace("```json","").replace("```","")
+                questions = json.loads(txt).get("questions", [])
+            except Exception:
+                questions = [
+                    {"id": "q1", "question": "What information should the form collect?", "category": "form", "required": True},
+                    {"id": "q2", "question": "Any document requirements?", "category": "docs", "required": False}
+                ]
             
-            response = self.model.invoke(messages)
-            response_text = response.content.strip()
-            
-            # Clean response
-            if response_text.startswith("```json"):
-                response_text = response_text.replace("```json", "").replace("```", "").strip()
-            
-            questions_data = json.loads(response_text)
-            questions = questions_data.get("questions", [])
-            
-            print(f"\n[INFO] Generated {len(questions)} questions")
+            # Reset index for new batch
+            index = 0
 
-            # Format questions for user
-            question_text = "I have some clarifying questions:\n\n"
-            for q in questions:
-                question_text += f"- {q['question']}\n"
+        # 2. Select current question
+        if index < len(questions):
+            q_current = questions[index]
+            display_text = f"Clarifying Question [{index + 1}/{len(questions)}]:\n\n{q_current['question']}"
             
             return {
                 "clarifying_questions": questions,
-                "question_iteration": state.get("question_iteration", 0) + 1,
-                "last_message": question_text
+                "current_question_index": index,
+                "question_iteration": state.get("question_iteration", 0) + (1 if index == 0 and not state.get("clarifying_questions") else 0),
+                "last_message": display_text
             }
-            
-        except Exception as e:
-            print(f"\n[WARNING] LLM question generation failed: {e}")
-            # Fallback questions
-            fallback_questions = [
-                {
-                    "id": "q1",
-                    "question": "What information should end users provide in the submission form?",
-                    "category": "form_fields",
-                    "required": True
-                },
-                {
-                    "id": "q2",
-                    "question": "Are there any document upload requirements?",
-                    "category": "documents",
-                    "required": False
-                },
-                {
-                    "id": "q3",
-                    "question": "Should there be any time limits or deadlines?",
-                    "category": "business_rules",
-                    "required": False
-                }
-            ]
-            
-            return {
-                "clarifying_questions": fallback_questions,
-                "question_iteration": state.get("question_iteration", 0) + 1,
-                "last_message": "Could you please provide: 1. Form fields needed? 2. Document requirements? 3. Time limits?"
-            }
+        
+        return {"last_message": "Proceeding..."}
 
     def _collect_user_answers(self, state: GraphState):
         """
-        Parse user input into answers
+        Store user answer for the current question
         """
         questions = state.get("clarifying_questions", [])
         user_input = state.get("last_user_message", "")
         existing_answers = state.get("user_answers", {})
+        index = state.get("current_question_index", 0)
         
-        print("\n[LLM] Parsing user answers...")
+        if not questions or index >= len(questions):
+            return {"user_answers": existing_answers}
+
+        current_q = questions[index]
+        print(f"\n[INFO] Collecting answer for: {current_q['id']}")
         
-        # Use LLM to map user input to questions
-        prompt = f"""
-You are mapping user text responses to specific questions.
-
-QUESTIONS:
-{json.dumps(questions, indent=2)}
-
-USER INPUT:
-"{user_input}"
-
-Map the user's input to the question IDs. Return valid JSON:
-{{
-  "answers": {{
-    "q1": "extracted answer",
-    "q2": "extracted answer"
-  }}
-}}
-"""
-        try:
-            messages = [HumanMessage(content=prompt)]
-            response = self.model.invoke(messages)
-            
-            # naive cleanup
-            txt = response.content.strip().replace("```json","").replace("```","")
-            parsed = json.loads(txt)
-            new_answers = parsed.get("answers", {})
-            
-            # Merge
-            answers = existing_answers.copy()
-            answers.update(new_answers)
-            
-            return {"user_answers": answers}
-            
-        except Exception:
-             # Fallback: dump everything into first unanswered or just generic
-             return {"user_answers": existing_answers}
+        # Store answer directly
+        new_answers = existing_answers.copy()
+        new_answers[current_q['id']] = user_input
+        
+        return {
+            "user_answers": new_answers,
+            "current_question_index": index + 1
+        }
 
     def _validate_user_answers(self, state: GraphState):
         """
@@ -738,7 +665,7 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
 
     def _should_ask_more_questions(self, state: GraphState) -> str:
         """
-        Decide if more questions needed
+        Decide if more questions needed after validation
         """
         validation = state.get("validation_result", {})
         iteration = state.get("question_iteration", 0)
@@ -750,8 +677,20 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
             print("\n[WARNING] Max question iterations reached, proceeding anyway")
             return "proceed"
         else:
-            print("\n[INFO] Need more information...")
+            print("\n[INFO] Need more information, resetting for new batch...")
             return "ask_more"
+
+    def _check_batch_status(self, state: GraphState) -> str:
+        """
+        Decide if batch is finished
+        """
+        questions = state.get("clarifying_questions", [])
+        index = state.get("current_question_index", 0)
+        
+        if index < len(questions):
+            return "next_question"
+        else:
+            return "batch_done"
 
     def _build_graph(self):
         """
@@ -775,9 +714,18 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
         graph.set_entry_point("analyze")
         graph.add_edge("analyze", "generate_questions")
         graph.add_edge("generate_questions", "collect_answers")
-        graph.add_edge("collect_answers", "validate_answers")
         
-        # Conditional: ask more or proceed
+        # Per-question loop
+        graph.add_conditional_edges(
+            "collect_answers",
+            self._check_batch_status,
+            {
+                "next_question": "generate_questions",
+                "batch_done": "validate_answers"
+            }
+        )
+        
+        # Conditional: ask more (new batch) or proceed
         graph.add_conditional_edges(
             "validate_answers",
             self._should_ask_more_questions,
