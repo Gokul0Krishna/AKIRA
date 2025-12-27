@@ -25,18 +25,37 @@
                 {% endfor %}
             </div>
 
-            <form method="post" class="input-area">
-                <input type="text" name="message" class="message-input" placeholder="Type your message..." required
-                    autofocus autocomplete="off">
+            <form method="post" id="chat-form" class="input-area">
+                <textarea name="message" id="message-input" class="message-input" placeholder="Type your message..." required
+                    autofocus autocomplete="off"></textarea>
                 <button type="submit" class="btn">Send</button>
             </form>
         </div>
     </div>
 
     <script>
-        // Scroll to bottom of chat
         const messagesDiv = document.getElementById('messages');
+        const messageInput = document.getElementById('message-input');
+        const chatForm = document.getElementById('chat-form');
+
+        // Scroll to bottom of chat
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+        // Auto-resize textarea
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // Handle Enter key
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (this.value.trim() !== '') {
+                    chatForm.submit();
+                }
+            }
+        });
     </script>
 </body>
 

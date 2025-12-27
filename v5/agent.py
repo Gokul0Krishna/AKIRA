@@ -71,63 +71,91 @@ class WorkflowAgent:
 
     def _analyze_request(self, state: GraphState):
         """
-        Initial analysis and parse structured user input
+        Intelligently parse user request using LLM
         """
-        lines = state['user_request'].strip().split('\n')
-        workflow_title = lines[0].strip() if len(lines) > 0 else "University Workflow"
+        user_input = state.get('user_request', '').strip()
         
-        # Parse approval chain
-        approval_sequence = []
-        if len(lines) > 1:
-            chain_line = lines[1].strip().lower()
-            parts = [p.strip() for p in chain_line.replace(' to ', '|').split('|')]
-            approval_sequence = [p for p in parts if p and p != 'student']
+        print("\n[LLM] Analyzing user request...")
         
-        # Parse additional requirements
-        additional_reqs = []
-        if len(lines) > 2:
-            additional_reqs = [line.strip() for line in lines[2:] if line.strip()]
-        
-        # Build approval chain
-        approval_chain = []
-        for idx, role in enumerate(approval_sequence, 1):
-            role_title = role.title()
-            rejection_behavior = "end_workflow"
-            notification_rules = []
+        prompt = f"""
+Analyze the following user request for a workflow and extract key information.
+
+USER REQUEST:
+"{user_input}"
+
+Extract:
+1. A concise Workflow Title.
+2. The Approval Sequence (ordered list of roles/approvers).
+3. Any additional requirements (notifications, special rules, etc.).
+
+Return ONLY valid JSON:
+{{
+  "workflow_title": "Title",
+  "approval_sequence": ["Role 1", "Role 2", "Role 3"],
+  "additional_requirements": ["Rule 1", "Rule 2"]
+}}
+"""
+        try:
+            messages = [
+                SystemMessage(content="You are a workflow analyst assistant. Always respond with valid JSON only."),
+                HumanMessage(content=prompt)
+            ]
+            response = self.model.invoke(messages)
+            response_text = response.content.strip()
             
-            for req in additional_reqs:
-                if "reject" in req.lower() and "director" in req.lower():
-                    notification_rules.append("notify director on rejection")
-                    rejection_behavior = "notify_director"
+            # Clean response
+            if response_text.startswith("```json"):
+                response_text = response_text.replace("```json", "").replace("```", "").strip()
             
-            approval_chain.append({
-                "level": idx,
-                "approver_role": role_title,
-                "approver_type": "single",
-                "source": "from_form",
-                "conditions": [f"Level {idx} approver", "Can approve/reject with comments"],
-                "rejection_behavior": rejection_behavior,
-                "notification_rules": notification_rules,
-                "timeout_hours": 48
-            })
-        
-        # Basic analysis
-        analysis = {
-            "workflow_title": workflow_title,
-            "approval_sequence": approval_sequence,
-            "additional_requirements": additional_reqs,
-            "approval_chain": approval_chain
-        }
-        
-        print("\n[ANALYSIS] INITIAL ANALYSIS COMPLETE")
-        print(f"   Workflow: {workflow_title}")
-        print(f"   Approval Chain: {' → '.join([r.title() for r in approval_sequence])}")
-        
-        return {
-            "workflow_analysis": analysis,
-            "approval_chain": approval_chain,
-            "question_iteration": 0
-        }
+            analysis = json.loads(response_text)
+            
+            workflow_title = analysis.get("workflow_title", "University Workflow")
+            approval_sequence = analysis.get("approval_sequence", [])
+            additional_reqs = analysis.get("additional_requirements", [])
+            
+            # Build approval chain
+            approval_chain = []
+            for idx, role in enumerate(approval_sequence, 1):
+                role_title = role.strip().title()
+                rejection_behavior = "end_workflow"
+                notification_rules = []
+                
+                for req in additional_reqs:
+                    if "reject" in req.lower() and role.lower() in req.lower():
+                        notification_rules.append(f"notify {role} on rejection")
+                        rejection_behavior = "special_rejection_logic"
+                
+                approval_chain.append({
+                    "level": idx,
+                    "approver_role": role_title,
+                    "approver_type": "single",
+                    "source": "from_form",
+                    "conditions": [f"Level {idx} approver", "Can approve/reject with comments"],
+                    "rejection_behavior": rejection_behavior,
+                    "notification_rules": notification_rules,
+                    "timeout_hours": 48
+                })
+            
+            print("[ANALYSIS] INITIAL ANALYSIS COMPLETE")
+            print(f"   Workflow: {workflow_title}")
+            print(f"   Approval Chain: {' -> '.join([r.strip().title() for r in approval_sequence])}")
+            
+            return {
+                "workflow_analysis": analysis,
+                "approval_chain": approval_chain,
+                "question_iteration": 0
+            }
+            
+        except Exception as e:
+            print(f"\n[ERROR] Initial analysis failed: {e}")
+            # Fallback to basic (previous logic)
+            workflow_title = "University Workflow"
+            approval_chain = []
+            return {
+                "workflow_analysis": {"workflow_title": workflow_title},
+                "approval_chain": approval_chain,
+                "question_iteration": 0
+            }
 
     def _generate_clarifying_questions(self, state: GraphState):
         """
