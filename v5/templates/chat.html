@@ -58,18 +58,74 @@
 
         // Submission logic
         function submitForm() {
-            if (messageInput.value.trim() === '') return;
+            const content = messageInput.value.trim();
+            if (content === '') return;
+
+            // Add user message to UI immediately
+            const ts = new Date().toLocaleString();
+            const userMsgDiv = document.createElement('div');
+            userMsgDiv.className = 'message user';
+            userMsgDiv.innerHTML = `<div>${content.replace(/\n/g, '<br>')}</div><div class="message-meta">${ts}</div>`;
+            messagesDiv.appendChild(userMsgDiv);
 
             // Show thinking indicator
             thinkingIndicator.style.display = 'block';
+            // Set initial thinking text
+            thinkingIndicator.firstChild.textContent = 'Agent is starting...';
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
-            // Disable interactions to prevent double-submit
-            messageInput.disabled = true;
+            // Disable interactions
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            messageInput.readOnly = true;
             sendBtn.disabled = true;
             sendBtn.style.opacity = '0.5';
 
-            chatForm.submit();
+            // 1. Post to Server
+            fetch(window.location.href, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: content })
+            }).then(response => {
+                if (response.ok) {
+                    // 2. Open Stream
+                    const eventSource = new EventSource(`/stream/{{ chat_id }}`);
+
+                    eventSource.onmessage = function (e) {
+                        const data = JSON.parse(e.data);
+
+                        if (data.type === 'log') {
+                            // Update thinking text
+                            thinkingIndicator.firstChild.textContent = data.content;
+                        } else if (data.type === 'final') {
+                            eventSource.close();
+
+                            // Hide thinking
+                            thinkingIndicator.style.display = 'none';
+
+                            // Append final message
+                            const finalMsgDiv = document.createElement('div');
+                            finalMsgDiv.className = 'message other';
+                            finalMsgDiv.innerHTML = `<div>${data.content.replace(/\n/g, '<br>')}</div><div class="message-meta">${data.timestamp}</div>`;
+                            messagesDiv.appendChild(finalMsgDiv);
+
+                            // Re-enable interactions
+                            messageInput.readOnly = false;
+                            sendBtn.disabled = false;
+                            sendBtn.style.opacity = '1';
+                            messageInput.focus();
+
+                            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                        } else if (data.type === 'error') {
+                            eventSource.close();
+                            alert("Error: " + data.content);
+                            messageInput.readOnly = false;
+                            sendBtn.disabled = false;
+                            sendBtn.style.opacity = '1';
+                        }
+                    };
+                }
+            });
         }
 
         // Handle Enter key

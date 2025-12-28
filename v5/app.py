@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, Response, stream_with_context
 import sqlite3
 import uuid
 import datetime
@@ -75,8 +75,14 @@ def chat_route(chat_id):
     conn = get_db_connection()
     
     if request.method == 'POST':
-        message = request.form['message']
-        sender = 'User' # Hardcoded for now, could be dynamic
+        # Check if it's an AJAX request (JSON)
+        if request.is_json:
+            data = request.get_json()
+            message = data.get('message', '')
+        else:
+            message = request.form.get('message', '')
+            
+        sender = 'User'
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # Check if workflow exists
@@ -85,27 +91,51 @@ def chat_route(chat_id):
         conn.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
                      (chat_id, message, timestamp, sender, workflow_exists))
         conn.commit()
+        conn.close()
         
-        # Get response from agent
-        try:
-            response_text = agent.run_step(message, chat_id)
-        except Exception as e:
-            response_text = f"Error processing request: {str(e)}"
-            
-        # Save system response
-        sys_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Re-check if workflow was just generated
-        workflow_exists = os.path.exists(f"{chat_id}.json")
-        
-        conn.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
-                     (chat_id, response_text, sys_timestamp, 'System', workflow_exists))
-        conn.commit()
+        if request.is_json:
+            return {'status': 'success'}
+        return redirect(url_for('chat_route', chat_id=chat_id))
         
     messages = conn.execute('SELECT * FROM chatlog WHERE chatid = ? ORDER BY timestamp', (chat_id,)).fetchall()
     conn.close()
     
     return render_template('chat.html', chat_id=chat_id, messages=messages)
+
+@app.route('/stream/<chat_id>')
+def stream(chat_id):
+    # Get the last user message to process
+    conn = get_db_connection()
+    last_user_msg = conn.execute('SELECT message FROM chatlog WHERE chatid = ? AND sender = "User" ORDER BY timestamp DESC LIMIT 1', (chat_id,)).fetchone()
+    conn.close()
+    
+    if not last_user_msg:
+        return Response("No message to process", status=400)
+
+    def generate():
+        try:
+            for update in agent.run_step_stream(last_user_msg['message'], chat_id):
+                if isinstance(update, str):
+                    # Progress update
+                    yield f"data: {json.dumps({'type': 'log', 'content': update})}\n\n"
+                elif isinstance(update, dict) and "final_message" in update:
+                    # Final message
+                    response_text = update['final_message']
+                    sys_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # Store in DB
+                    conn_sys = get_db_connection()
+                    workflow_exists = os.path.exists(f"{chat_id}.json")
+                    conn_sys.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
+                                 (chat_id, response_text, sys_timestamp, 'System', workflow_exists))
+                    conn_sys.commit()
+                    conn_sys.close()
+                    
+                    yield f"data: {json.dumps({'type': 'final', 'content': response_text, 'timestamp': sys_timestamp})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

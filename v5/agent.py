@@ -29,6 +29,7 @@ class GraphState(TypedDict):
     last_user_message: str
     chat_id: str
     current_question_index: int
+    logs: List[str]
 
 class WorkflowAgent:
     def __init__(self):
@@ -42,7 +43,7 @@ class WorkflowAgent:
         self.checkpointer = MemorySaver()
         self.app = self._build_graph()
 
-    def run_step(self, user_input: str, thread_id: str):
+    def run_step_stream(self, user_input: str, thread_id: str):
         config = {"configurable": {"thread_id": thread_id}}
         
         # Check current state
@@ -55,19 +56,43 @@ class WorkflowAgent:
                 "question_iteration": 0,
                 "user_answers": {},
                 "chat_id": thread_id,
-                "current_question_index": 0
+                "current_question_index": 0,
+                "logs": []
             }
             # Run until interrupt (collect_answers) or End
             for event in self.app.stream(initial_state, config=config):
-                pass
+                # Look for node transitions and yield them
+                for node_name, output in event.items():
+                    if "last_message" not in output: # Skip yielding the final message here
+                        yield f"Status: {node_name.replace('_', ' ').title()}..."
+
         else:
             # Resume with user input
             self.app.update_state(config, {"last_user_message": user_input})
             # Resume execution
             for event in self.app.stream(None, config=config):
-                pass
+                for node_name, output in event.items():
+                    if "last_message" not in output:
+                        yield f"Status: {node_name.replace('_', ' ').title()}..."
                 
         # Get final state to retrieve response
+        final_state = self.app.get_state(config)
+        yield {"final_message": final_state.values.get("last_message", "Processing completed.")}
+
+    def run_step(self, user_input: str, thread_id: str):
+        # Fallback non-streaming version
+        config = {"configurable": {"thread_id": thread_id}}
+        state = self.app.get_state(config)
+        if not state.values:
+            initial_state = {
+                "user_request": user_input, "question_iteration": 0, "user_answers": {},
+                "chat_id": thread_id, "current_question_index": 0, "logs": []
+            }
+            self.app.invoke(initial_state, config=config)
+        else:
+            self.app.update_state(config, {"last_user_message": user_input})
+            self.app.invoke(None, config=config)
+        
         final_state = self.app.get_state(config)
         return final_state.values.get("last_message", "Processing completed.")
 
