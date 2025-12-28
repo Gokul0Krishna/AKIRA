@@ -142,7 +142,8 @@ h1 {
     background: #1e293b;
     color: #94a3b8;
     font-style: italic;
-    display: none; /* Hidden by default */
+    display: none;
+    /* Hidden by default */
 }
 
 .thinking-dots {
@@ -158,12 +159,26 @@ h1 {
     animation: pulse 1.5s infinite ease-in-out;
 }
 
-.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
-.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+.thinking-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.thinking-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
 
 @keyframes pulse {
-    0%, 100% { transform: scale(0.8); opacity: 0.5; }
-    50% { transform: scale(1.2); opacity: 1; }
+
+    0%,
+    100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
 }
 
 .input-area {
@@ -200,4 +215,89 @@ h1 {
 
 .back-link:hover {
     color: var(--text-color);
+}
+
+/* View JSON Button */
+.view-json-btn {
+    display: block;
+    width: 100%;
+    margin-top: 1rem;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    color: white;
+    padding: 0.6rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.view-json-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+/* Modal Styling */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    position: relative;
+    margin: 5% auto;
+    width: 80%;
+    max-width: 900px;
+    height: 700px;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    background: linear-gradient(to right, #60a5fa, #a855f7);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.close-modal {
+    color: var(--secondary-text);
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-modal:hover {
+    color: var(--text-color);
+}
+
+/* JSONEditor custom styles to fit dark theme */
+.jsoneditor {
+    border: 1px solid #334155 !important;
+}
+
+.jsoneditor-menu {
+    background-color: #334155 !important;
+    border-bottom: 1px solid #334155 !important;
+}
+
+.jsoneditor-navigation-bar {
+    background-color: #1e293b !important;
+    color: var(--text-color) !important;
 }

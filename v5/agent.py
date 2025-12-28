@@ -224,7 +224,10 @@ HISTORY OF QUESTIONS ASKED AND ANSWERS RECEIVED:
 {history_text if history_text else "None"}
 
 Generate a minimum of 1 and a maximum of 5 NEW, SPECIFIC clarifying questions. 
-CRITICAL: Do NOT repeat any questions already asked in the history above. Focus on missing details or areas needing deeper clarification based on previous answers.
+CRITICAL: 
+- Do NOT repeat any questions already asked in the history above. 
+- Do NOT ask about the internal evaluation criteria or decision logic used by human approvers (e.g., "What criteria does the Dean use to approve?"). Focus only on the technical workflow structure, form fields, notifications, and data requirements.
+- Focus on missing details or areas needing deeper clarification based on previous answers.
 
 Return ONLY valid JSON:
 {{
@@ -341,6 +344,8 @@ Validate if the answers are sufficient to proceed with workflow generation. Chec
 2. Are answers clear and specific enough?
 3. Are there any contradictions?
 4. Is any critical information missing?
+
+IMPORTANT: Do NOT consider the "evaluation criteria" or "decision logic" of human approvers as missing information. We only care about the technical structure, form fields, and communication flow. If the only thing missing is "how the advisor decides", consider the validation complete/valid.
 
 Return ONLY valid JSON:
 {{
@@ -745,11 +750,15 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
         print(f"[DESC] {metadata.get('description', '')}")
         
         # Save to file
+        workflows_dir = os.path.join(os.path.dirname(__file__), 'workflows')
+        os.makedirs(workflows_dir, exist_ok=True)
         filename = f"{chat_id}.json"
+        filepath = os.path.join(workflows_dir, filename)
+        
         try:
-            with open(filename, 'w') as f:
+            with open(filepath, 'w') as f:
                 json.dump(master_json, f, indent=2)
-            print(f"\n[SAVE] Master JSON saved to: {filename}")
+            print(f"\n[SAVE] Master JSON saved to: {filepath}")
         except Exception as e:
             print(f"\n[ERROR] Failed to save JSON file: {e}")
         
@@ -757,7 +766,7 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
         
         return {
             "master_json": master_json,
-            "last_message": f"Workflow Generation Complete!\n\nName: {metadata.get('workflow_name')}\nDescription: {metadata.get('description')}\n\nRelative file path: ./{filename}"
+            "last_message": f"Workflow Generation Complete!\n\nName: {metadata.get('workflow_name')}\nDescription: {metadata.get('description')}\n\nWorkflow structure is available for viewing."
         }
 
     def _should_ask_more_questions(self, state: GraphState) -> str:

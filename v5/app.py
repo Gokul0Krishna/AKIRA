@@ -11,6 +11,8 @@ agent = WorkflowAgent()
 
 app = Flask(__name__)
 DB_PATH = os.path.join(os.path.dirname(__file__), 'database')
+WORKFLOWS_DIR = os.path.join(os.path.dirname(__file__), 'workflows')
+os.makedirs(WORKFLOWS_DIR, exist_ok=True)
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -27,8 +29,8 @@ def index():
         conn = get_db_connection()
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Check if workflow exists (unlikely for new chat but for consistency)
-        workflow_exists = os.path.exists(f"{new_chat_id}.json")
+        # Check if workflow exists
+        workflow_exists = os.path.exists(os.path.join(WORKFLOWS_DIR, f"{new_chat_id}.json"))
         
         conn.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
                      (new_chat_id, "what are we building today?", timestamp, 'System', workflow_exists))
@@ -87,7 +89,7 @@ def chat_route(chat_id):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # Check if workflow exists
-        workflow_exists = os.path.exists(f"{chat_id}.json")
+        workflow_exists = os.path.exists(os.path.join(WORKFLOWS_DIR, f"{chat_id}.json"))
         
         conn.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
                      (chat_id, message, timestamp, sender, workflow_exists))
@@ -126,17 +128,26 @@ def stream(chat_id):
                     
                     # Store in DB
                     conn_sys = get_db_connection()
-                    workflow_exists = os.path.exists(f"{chat_id}.json")
+                    workflow_exists = os.path.exists(os.path.join(WORKFLOWS_DIR, f"{chat_id}.json"))
                     conn_sys.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
                                  (chat_id, response_text, sys_timestamp, 'System', workflow_exists))
                     conn_sys.commit()
                     conn_sys.close()
                     
-                    yield f"data: {json.dumps({'type': 'final', 'content': response_text, 'timestamp': sys_timestamp})}\n\n"
+                    yield f"data: {json.dumps({'type': 'final', 'content': response_text, 'timestamp': sys_timestamp, 'workflow_generated': workflow_exists})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
 
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
+
+@app.route('/get_json/<chat_id>')
+def get_json(chat_id):
+    filepath = os.path.join(WORKFLOWS_DIR, f"{chat_id}.json")
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        return json.dumps(data)
+    return {'error': 'File not found'}, 404
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

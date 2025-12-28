@@ -9,6 +9,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- JSON Editor -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.10.2/jsoneditor.min.css" rel="stylesheet" type="text/css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.10.2/jsoneditor.min.js"></script>
 </head>
 
 <body>
@@ -20,6 +23,9 @@
                 {% for msg in messages %}
                 <div class="message {% if msg['sender'] == 'User' %}user{% else %}other{% endif %}">
                     <div>{{ msg['message'] }}</div>
+                    {% if msg['sender'] == 'System' and msg['workflow_generated'] %}
+                    <button class="view-json-btn" onclick="viewWorkflow('{{ chat_id }}')">View Workflow Structure</button>
+                    {% endif %}
                     <div class="message-meta">{{ msg['timestamp'] }}</div>
                 </div>
                 {% endfor %}
@@ -37,6 +43,17 @@
                     required autofocus autocomplete="off"></textarea>
                 <button type="submit" class="btn">Send</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal for JSON Viewer -->
+    <div id="json-modal" class="modal">
+        <div class="modal-content card">
+            <div class="modal-header">
+                <h2>Workflow Structure</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div id="jsoneditor" style="width: 100%; height: 500px;"></div>
         </div>
     </div>
 
@@ -106,7 +123,11 @@
                             // Append final message
                             const finalMsgDiv = document.createElement('div');
                             finalMsgDiv.className = 'message other';
-                            finalMsgDiv.innerHTML = `<div>${data.content.replace(/\n/g, '<br>')}</div><div class="message-meta">${data.timestamp}</div>`;
+                            let btnHtml = '';
+                            if (data.workflow_generated) {
+                                btnHtml = `<button class="view-json-btn" onclick="viewWorkflow('{{ chat_id }}')">View Workflow Structure</button>`;
+                            }
+                            finalMsgDiv.innerHTML = `<div>${data.content.replace(/\n/g, '<br>')}</div>${btnHtml}<div class="message-meta">${data.timestamp}</div>`;
                             messagesDiv.appendChild(finalMsgDiv);
 
                             // Re-enable interactions
@@ -141,6 +162,44 @@
             e.preventDefault();
             submitForm();
         });
+
+        // JSON Viewer Logic
+        let editor = null;
+        const modal = document.getElementById('json-modal');
+        const closeModal = document.querySelector('.close-modal');
+
+        function viewWorkflow(chatId) {
+            modal.style.display = 'block';
+            if (!editor) {
+                const container = document.getElementById('jsoneditor');
+                const options = {
+                    mode: 'view',
+                    modes: ['view', 'tree', 'text'], // allowed modes
+                };
+                editor = new JSONEditor(container, options);
+            }
+
+            fetch(`/get_json/${chatId}`)
+                .then(response => response.json())
+                .then(data => {
+                    editor.set(data);
+                    editor.expandAll();
+                })
+                .catch(err => {
+                    console.error('Error fetching JSON:', err);
+                    alert('Could not load workflow data.');
+                });
+        }
+
+        closeModal.onclick = function() {
+            modal.style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
     </script>
 </body>
 
