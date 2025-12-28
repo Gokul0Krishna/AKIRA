@@ -170,7 +170,7 @@ Return ONLY valid JSON:
         questions = state.get("clarifying_questions", [])
         index = state.get("current_question_index", 0)
         
-        # 1. Generate new batch if empty
+        # 1. Generate new batch if empty OR if we've answered everything and still need more
         if not questions:
             print("\n[LLM] Generating a new batch of clarifying questions...")
             prompt = f"""
@@ -213,7 +213,7 @@ Return ONLY valid JSON:
                 "last_message": display_text
             }
         
-        return {"last_message": "Proceeding..."}
+        return {"last_message": "Questions answered! I'm now processing the information and generating your workflow schema..."}
 
     def _collect_user_answers(self, state: GraphState):
         """
@@ -660,7 +660,7 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
         
         return {
             "master_json": master_json,
-            "last_message": f"Workflow Generation Complete!\n\nName: {metadata.get('workflow_name')}\nDescription: {metadata.get('description')}\n\nFile saved: {filename}"
+            "last_message": f"Workflow Generation Complete!\n\nName: {metadata.get('workflow_name')}\nDescription: {metadata.get('description')}\n\nRelative file path: ./{filename}"
         }
 
     def _should_ask_more_questions(self, state: GraphState) -> str:
@@ -678,7 +678,19 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
             return "proceed"
         else:
             print("\n[INFO] Need more information, resetting for new batch...")
+            # We return state updates in nodes, but this is a conditional edge.
+            # We'll clear the questions in generate_questions if it sees they are all answered.
             return "ask_more"
+
+    def _should_ask_more_questions_logic(self, state: GraphState) -> str:
+        """
+        Intermediate check to clear state before looping
+        """
+        # Note: In a real graph we'd use another node to reset, 
+        # but for simplicity we inject the clear command here or in generate_questions.
+        # Let's handle it in generate_questions (if index >= len, gen new).
+        # But we need to signal generate_questions to actually generate new ones.
+        return self._should_ask_more_questions(state)
 
     def _check_batch_status(self, state: GraphState) -> str:
         """

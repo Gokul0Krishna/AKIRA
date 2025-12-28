@@ -138,6 +138,34 @@ h1 {
     text-align: right;
 }
 
+.message.thinking {
+    background: #1e293b;
+    color: #94a3b8;
+    font-style: italic;
+    display: none; /* Hidden by default */
+}
+
+.thinking-dots {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.thinking-dots span {
+    width: 6px;
+    height: 6px;
+    background-color: #94a3b8;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+    0%, 100% { transform: scale(0.8); opacity: 0.5; }
+    50% { transform: scale(1.2); opacity: 1; }
+}
+
 .input-area {
     display: flex;
     gap: 1rem;

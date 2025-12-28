@@ -25,8 +25,12 @@ def index():
         # Insert initial greeting
         conn = get_db_connection()
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        conn.execute('INSERT INTO chatlog (chatid, message, timestamp, sender) VALUES (?, ?, ?, ?)',
-                     (new_chat_id, "what are we building today?", timestamp, 'System'))
+        
+        # Check if workflow exists (unlikely for new chat but for consistency)
+        workflow_exists = os.path.exists(f"{new_chat_id}.json")
+        
+        conn.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
+                     (new_chat_id, "what are we building today?", timestamp, 'System', workflow_exists))
         conn.commit()
         conn.close()
         
@@ -75,8 +79,11 @@ def chat_route(chat_id):
         sender = 'User' # Hardcoded for now, could be dynamic
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        conn.execute('INSERT INTO chatlog (chatid, message, timestamp, sender) VALUES (?, ?, ?, ?)',
-                     (chat_id, message, timestamp, sender))
+        # Check if workflow exists
+        workflow_exists = os.path.exists(f"{chat_id}.json")
+        
+        conn.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
+                     (chat_id, message, timestamp, sender, workflow_exists))
         conn.commit()
         
         # Get response from agent
@@ -87,8 +94,12 @@ def chat_route(chat_id):
             
         # Save system response
         sys_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        conn.execute('INSERT INTO chatlog (chatid, message, timestamp, sender) VALUES (?, ?, ?, ?)',
-                     (chat_id, response_text, sys_timestamp, 'System'))
+        
+        # Re-check if workflow was just generated
+        workflow_exists = os.path.exists(f"{chat_id}.json")
+        
+        conn.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
+                     (chat_id, response_text, sys_timestamp, 'System', workflow_exists))
         conn.commit()
         
     messages = conn.execute('SELECT * FROM chatlog WHERE chatid = ? ORDER BY timestamp', (chat_id,)).fetchall()

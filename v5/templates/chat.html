@@ -23,11 +23,18 @@
                     <div class="message-meta">{{ msg['timestamp'] }}</div>
                 </div>
                 {% endfor %}
+                <!-- Thinking Indicator -->
+                <div id="thinking" class="message System thinking">
+                    Agent is thinking
+                    <div class="thinking-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
             </div>
 
             <form method="post" id="chat-form" class="input-area">
-                <textarea name="message" id="message-input" class="message-input" placeholder="Type your message..." required
-                    autofocus autocomplete="off"></textarea>
+                <textarea name="message" id="message-input" class="message-input" placeholder="Type your message..."
+                    required autofocus autocomplete="off"></textarea>
                 <button type="submit" class="btn">Send</button>
             </form>
         </div>
@@ -37,24 +44,46 @@
         const messagesDiv = document.getElementById('messages');
         const messageInput = document.getElementById('message-input');
         const chatForm = document.getElementById('chat-form');
+        const thinkingIndicator = document.getElementById('thinking');
+        const sendBtn = chatForm.querySelector('.btn');
 
         // Scroll to bottom of chat
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
         // Auto-resize textarea
-        messageInput.addEventListener('input', function() {
+        messageInput.addEventListener('input', function () {
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
         });
 
+        // Submission logic
+        function submitForm() {
+            if (messageInput.value.trim() === '') return;
+
+            // Show thinking indicator
+            thinkingIndicator.style.display = 'block';
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            // Disable interactions to prevent double-submit
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+            sendBtn.style.opacity = '0.5';
+
+            chatForm.submit();
+        }
+
         // Handle Enter key
-        messageInput.addEventListener('keydown', function(e) {
+        messageInput.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (this.value.trim() !== '') {
-                    chatForm.submit();
-                }
+                submitForm();
             }
+        });
+
+        // Handle Form Submit (for button clicks)
+        chatForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            submitForm();
         });
     </script>
 </body>
