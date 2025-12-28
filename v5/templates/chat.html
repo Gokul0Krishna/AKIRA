@@ -10,7 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <!-- JSON Editor -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.10.2/jsoneditor.min.css" rel="stylesheet" type="text/css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.10.2/jsoneditor.min.css" rel="stylesheet"
+        type="text/css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.10.2/jsoneditor.min.js"></script>
 </head>
 
@@ -19,13 +20,26 @@
         <a href="/" class="back-link">← Back to Home</a>
 
         <div class="chat-container card">
+            <div class="chat-header">
+                <h2>Chat Session</h2>
+                <button id="header-workflow-btn" class="header-btn"
+                    style="display: {% if show_header_btn %}flex{% else %}none{% endif %};"
+                    onclick="viewWorkflow('{{ chat_id }}')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                            d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                        </path>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                    Display Workflow
+                </button>
+            </div>
             <div class="messages-area" id="messages">
                 {% for msg in messages %}
                 <div class="message {% if msg['sender'] == 'User' %}user{% else %}other{% endif %}">
                     <div>{{ msg['message'] }}</div>
-                    {% if msg['sender'] == 'System' and msg['workflow_generated'] %}
-                    <button class="view-json-btn" onclick="viewWorkflow('{{ chat_id }}')">View Workflow Structure</button>
-                    {% endif %}
                     <div class="message-meta">{{ msg['timestamp'] }}</div>
                 </div>
                 {% endfor %}
@@ -50,10 +64,21 @@
     <div id="json-modal" class="modal">
         <div class="modal-content card">
             <div class="modal-header">
-                <h2>Workflow Structure</h2>
+                <div class="modal-title-group">
+                    <h2>Workflow Structure</h2>
+                    <div class="view-toggle">
+                        <button class="toggle-btn active" onclick="switchView('visual')">Visual Flow</button>
+                        <button class="toggle-btn" onclick="switchView('technical')">Technical JSON</button>
+                    </div>
+                </div>
                 <span class="close-modal">&times;</span>
             </div>
-            <div id="jsoneditor" style="width: 100%; height: 500px;"></div>
+            <div id="visual-viewer" class="workflow-visualizer">
+                <!-- Graphical steps will be injected here -->
+            </div>
+            <div id="json-viewer" class="json-viewer-container" style="display: none;">
+                <div id="jsoneditor" style="width: 100%; height: 500px;"></div>
+            </div>
         </div>
     </div>
 
@@ -123,11 +148,12 @@
                             // Append final message
                             const finalMsgDiv = document.createElement('div');
                             finalMsgDiv.className = 'message other';
-                            let btnHtml = '';
+
                             if (data.workflow_generated) {
-                                btnHtml = `<button class="view-json-btn" onclick="viewWorkflow('{{ chat_id }}')">View Workflow Structure</button>`;
+                                document.getElementById('header-workflow-btn').style.display = 'flex';
                             }
-                            finalMsgDiv.innerHTML = `<div>${data.content.replace(/\n/g, '<br>')}</div>${btnHtml}<div class="message-meta">${data.timestamp}</div>`;
+
+                            finalMsgDiv.innerHTML = `<div>${data.content.replace(/\n/g, '<br>')}</div><div class="message-meta">${data.timestamp}</div>`;
                             messagesDiv.appendChild(finalMsgDiv);
 
                             // Re-enable interactions
@@ -165,23 +191,31 @@
 
         // JSON Viewer Logic
         let editor = null;
+        let currentWorkflowData = null;
         const modal = document.getElementById('json-modal');
         const closeModal = document.querySelector('.close-modal');
 
         function viewWorkflow(chatId) {
             modal.style.display = 'block';
-            if (!editor) {
-                const container = document.getElementById('jsoneditor');
-                const options = {
-                    mode: 'view',
-                    modes: ['view', 'tree', 'text'], // allowed modes
-                };
-                editor = new JSONEditor(container, options);
-            }
+
+            // Default to visual view
+            switchView('visual');
 
             fetch(`/get_json/${chatId}`)
                 .then(response => response.json())
                 .then(data => {
+                    currentWorkflowData = data;
+                    renderGraphicalWorkflow(data);
+
+                    // Initialize or update JSON editor
+                    if (!editor) {
+                        const container = document.getElementById('jsoneditor');
+                        const options = {
+                            mode: 'view',
+                            modes: ['view', 'tree', 'text'],
+                        };
+                        editor = new JSONEditor(container, options);
+                    }
                     editor.set(data);
                     editor.expandAll();
                 })
@@ -191,11 +225,104 @@
                 });
         }
 
-        closeModal.onclick = function() {
+        function switchView(viewType) {
+            const visualViewer = document.getElementById('visual-viewer');
+            const jsonViewer = document.getElementById('json-viewer');
+            const btns = document.querySelectorAll('.toggle-btn');
+
+            if (viewType === 'visual') {
+                visualViewer.style.display = 'block';
+                jsonViewer.style.display = 'none';
+                btns[0].classList.add('active');
+                btns[1].classList.remove('active');
+            } else {
+                visualViewer.style.display = 'none';
+                jsonViewer.style.display = 'block';
+                btns[0].classList.remove('active');
+                btns[1].classList.add('active');
+            }
+        }
+
+        function renderGraphicalWorkflow(data) {
+            const container = document.getElementById('visual-viewer');
+            container.innerHTML = ''; // Clear previous
+
+            if (!data) return;
+
+            // 1. Trigger (Start)
+            if (data.microsoft_forms) {
+                const trigger = data.microsoft_forms;
+                container.appendChild(createStepCard({
+                    type: 'trigger',
+                    title: 'Start: Form Submission',
+                    subtitle: trigger.form_name || 'Workflow Trigger',
+                    details: `Collects: ${trigger.fields ? trigger.fields.join(', ') : 'Responses'}`,
+                    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>'
+                }));
+            }
+
+            // 2. Steps
+            if (data.power_automate_workflow && data.power_automate_workflow.steps) {
+                data.power_automate_workflow.steps.forEach((step, index) => {
+                    container.appendChild(createConnector());
+
+                    let icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>';
+                    let typeClass = 'action';
+
+                    if (step.type.toLowerCase().includes('approval')) {
+                        icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+                        typeClass = 'approval';
+                    } else if (step.type.toLowerCase().includes('notification') || step.type.toLowerCase().includes('email')) {
+                        icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>';
+                    }
+
+                    container.appendChild(createStepCard({
+                        type: typeClass,
+                        title: step.step_name,
+                        subtitle: step.type,
+                        details: step.description || `Automated ${step.type} action.`,
+                        icon: icon
+                    }));
+                });
+            }
+
+            // 3. End
+            container.appendChild(createConnector());
+            container.appendChild(createStepCard({
+                type: 'end',
+                title: 'End: Workflow Complete',
+                subtitle: 'Success',
+                details: 'All automated steps finished successfully.',
+                icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>'
+            }));
+        }
+
+        function createStepCard(step) {
+            const card = document.createElement('div');
+            card.className = `workflow-card ${step.type}`;
+            card.innerHTML = `
+                <div class="card-icon">${step.icon}</div>
+                <div class="card-content">
+                    <h3>${step.title}</h3>
+                    <h4>${step.subtitle}</h4>
+                    <p>${step.details}</p>
+                </div>
+            `;
+            return card;
+        }
+
+        function createConnector() {
+            const connector = document.createElement('div');
+            connector.className = 'workflow-connector';
+            connector.innerHTML = '<div class="line"></div><div class="arrow"></div>';
+            return connector;
+        }
+
+        closeModal.onclick = function () {
             modal.style.display = 'none';
         }
 
-        window.onclick = function(event) {
+        window.onclick = function (event) {
             if (event.target == modal) {
                 modal.style.display = 'none';
             }

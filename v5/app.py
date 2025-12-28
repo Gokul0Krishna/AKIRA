@@ -49,6 +49,7 @@ def index():
             FROM chatlog
             GROUP BY chatid
         ) c2 ON c1.chatid = c2.chatid AND c1.timestamp = c2.max_ts
+        ORDER BY c1.timestamp DESC
     '''
     chats_raw = conn.execute(query).fetchall()
     conn.close()
@@ -101,9 +102,16 @@ def chat_route(chat_id):
         return redirect(url_for('chat_route', chat_id=chat_id))
         
     messages = conn.execute('SELECT * FROM chatlog WHERE chatid = ? ORDER BY timestamp', (chat_id,)).fetchall()
+    
+    # Check if header button should be shown (latest message has workflow_generated=1)
+    show_header_btn = False
+    if messages:
+        latest_msg = messages[-1]
+        show_header_btn = bool(latest_msg['workflow_generated'])
+        
     conn.close()
     
-    return render_template('chat.html', chat_id=chat_id, messages=messages)
+    return render_template('chat.html', chat_id=chat_id, messages=messages, show_header_btn=show_header_btn)
 
 @app.route('/stream/<chat_id>')
 def stream(chat_id):
