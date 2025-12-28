@@ -30,6 +30,9 @@ class GraphState(TypedDict):
     chat_id: str
     current_question_index: int
     logs: List[str]
+    approval_chain_summary: str
+    question_history: List[Dict] # Complete history of all questions asked
+    validation_result: Dict # Latest validation result # Added to track for UI display
 
 class WorkflowAgent:
     def __init__(self):
@@ -57,13 +60,18 @@ class WorkflowAgent:
                 "user_answers": {},
                 "chat_id": thread_id,
                 "current_question_index": 0,
-                "logs": []
+                "logs": [],
+                "approval_chain_summary": "",
+                "question_history": [],
+                "validation_result": {}
             }
             # Run until interrupt (collect_answers) or End
             for event in self.app.stream(initial_state, config=config):
                 # Look for node transitions and yield them
                 for node_name, output in event.items():
-                    if "last_message" not in output: # Skip yielding the final message here
+                    if "last_message" in output:
+                        yield f"Status: {output['last_message']}"
+                    else:
                         yield f"Status: {node_name.replace('_', ' ').title()}..."
 
         else:
@@ -72,7 +80,9 @@ class WorkflowAgent:
             # Resume execution
             for event in self.app.stream(None, config=config):
                 for node_name, output in event.items():
-                    if "last_message" not in output:
+                    if "last_message" in output:
+                        yield f"Status: {output['last_message']}"
+                    else:
                         yield f"Status: {node_name.replace('_', ' ').title()}..."
                 
         # Get final state to retrieve response
@@ -163,14 +173,16 @@ Return ONLY valid JSON:
                     "timeout_hours": 48
                 })
             
+            summary = ' -> '.join([r.strip().title() for r in approval_sequence])
             print("[ANALYSIS] INITIAL ANALYSIS COMPLETE")
             print(f"   Workflow: {workflow_title}")
-            print(f"   Approval Chain: {' -> '.join([r.strip().title() for r in approval_sequence])}")
+            print(f"   Approval Chain: {summary}")
             
             return {
                 "workflow_analysis": analysis,
                 "approval_chain": approval_chain,
-                "question_iteration": 0
+                "question_iteration": 0,
+                "approval_chain_summary": summary
             }
             
         except Exception as e:
@@ -193,21 +205,31 @@ Return ONLY valid JSON:
         approval_chain = state.get("approval_chain", [])
         previous_answers = state.get("user_answers", {})
         questions = state.get("clarifying_questions", [])
+        history = state.get("question_history", [])
         index = state.get("current_question_index", 0)
         
-        # 1. Generate new batch if empty OR if we've answered everything and still need more
-        if not questions:
+        # 1. Generate new batch if empty OR if we've exhausted the current batch
+        if not questions or index >= len(questions):
             print("\n[LLM] Generating a new batch of clarifying questions...")
+            
+            # Format history for prompt
+            history_text = "\n".join([f"- Q: {item['question']}\n  A: {previous_answers.get(item['id'], 'No answer yet')}" for item in history])
+            
             prompt = f"""
 You are a workflow design expert.
 WORKFLOW: {workflow_title}
 CHAIN: {' → '.join([a['approver_role'] for a in approval_chain])}
 
-Generate 3-5 SPECIFIC clarifying questions. 
+HISTORY OF QUESTIONS ASKED AND ANSWERS RECEIVED:
+{history_text if history_text else "None"}
+
+Generate a minimum of 1 and a maximum of 5 NEW, SPECIFIC clarifying questions. 
+CRITICAL: Do NOT repeat any questions already asked in the history above. Focus on missing details or areas needing deeper clarification based on previous answers.
+
 Return ONLY valid JSON:
 {{
   "questions": [
-    {{"id": "q1", "question": "...", "category": "form_fields", "required": true}},
+    {{"id": "q_{len(history)+1}", "question": "...", "category": "form_fields", "required": true}},
     ...
   ]
 }}
@@ -216,12 +238,16 @@ Return ONLY valid JSON:
                 messages = [HumanMessage(content=prompt)]
                 response = self.model.invoke(messages)
                 txt = response.content.strip().replace("```json","").replace("```","")
-                questions = json.loads(txt).get("questions", [])
+                new_batch = json.loads(txt).get("questions", [])
+                
+                # Update history with new questions
+                history.extend(new_batch)
+                questions = new_batch # Current batch is the new questions
             except Exception:
-                questions = [
-                    {"id": "q1", "question": "What information should the form collect?", "category": "form", "required": True},
-                    {"id": "q2", "question": "Any document requirements?", "category": "docs", "required": False}
-                ]
+                # Fallback
+                new_batch = [{"id": f"q_{len(history)+1}", "question": "Could you provide more details on the submission requirements?", "category": "general", "required": True}]
+                history.extend(new_batch)
+                questions = new_batch
             
             # Reset index for new batch
             index = 0
@@ -229,16 +255,41 @@ Return ONLY valid JSON:
         # 2. Select current question
         if index < len(questions):
             q_current = questions[index]
-            display_text = f"Clarifying Question [{index + 1}/{len(questions)}]:\n\n{q_current['question']}"
+            
+            # Show approval chain on the very first question of the first batch
+            prefix = ""
+            if index == 0:
+                # 1. Show approval chain if first batch
+                if state.get("question_iteration", 0) <= 1:
+                    summary = state.get("approval_chain_summary")
+                    if summary:
+                        prefix = f"**Identified Approval Chain:**\n{summary}\n\n"
+                
+                # 2. Show validation report if looping back
+                report = state.get("validation_report")
+                if report:
+                    prefix += f"{report}\n\n"
+                elif state.get("question_iteration", 0) > 1:
+                    # Fallback if report missing but iteration > 1
+                    validation = state.get("validation_result", {})
+                    prefix += "**[WARNING] More information needed**\n"
+                    if validation.get("missing_info"):
+                        prefix += f"   *Missing:* {', '.join(validation['missing_info'])}\n"
+                    prefix += "\n"
+            
+            display_text = f"{prefix}Clarifying Question [{index + 1}/{len(questions)}]:\n\n{q_current['question']}"
             
             return {
                 "clarifying_questions": questions,
                 "current_question_index": index,
-                "question_iteration": state.get("question_iteration", 0) + (1 if index == 0 and not state.get("clarifying_questions") else 0),
+                "question_history": history,
+                "question_iteration": state.get("question_iteration", 0) + (1 if index == 0 else 0),
                 "last_message": display_text
             }
         
-        return {"last_message": "Questions answered! I'm now processing the information and generating your workflow schema..."}
+        # This fallback should ideally not be reached with the new loop logic, 
+        # but we'll return a neutral status just in case.
+        return {"last_message": "Checking validation status..."}
 
     def _collect_user_answers(self, state: GraphState):
         """
@@ -324,7 +375,28 @@ Return ONLY the JSON, no other text.
                 if validation.get("missing_info"):
                     print(f"   Missing: {', '.join(validation['missing_info'])}")
             
-            return {"validation_result": validation}
+            # Detailed log for the "Thinking..." indicator
+            log_msg = "[LLM] Validating your answers..."
+            if not validation.get("can_proceed", True):
+                log_msg = "[WARNING] More information needed"
+            
+            # Create a structured validation report for the UI
+            report = "**Validation Status Report**\n"
+            report += "---"
+            if validation.get("can_proceed", True):
+                report += "\n✅ Sufficient information collected.\n"
+            else:
+                report += "\n⚠️ Some details are still missing.\n"
+                if validation.get("missing_info"):
+                    report += "\n**Missing Information:**\n" + "\n".join([f"- {i}" for i in validation['missing_info']])
+                if validation.get("follow_up_needed"):
+                    report += "\n**Follow-up Areas:**\n" + "\n".join([f"- {i}" for i in validation['follow_up_needed']])
+            
+            return {
+                "validation_result": validation,
+                "last_message": log_msg,
+                "validation_report": report
+            }
             
         except Exception as e:
             print(f"\n[ERROR] Validation failed: {e}")
@@ -703,8 +775,6 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
             return "proceed"
         else:
             print("\n[INFO] Need more information, resetting for new batch...")
-            # We return state updates in nodes, but this is a conditional edge.
-            # We'll clear the questions in generate_questions if it sees they are all answered.
             return "ask_more"
 
     def _should_ask_more_questions_logic(self, state: GraphState) -> str:

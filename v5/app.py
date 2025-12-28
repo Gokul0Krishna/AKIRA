@@ -3,6 +3,7 @@ import sqlite3
 import uuid
 import datetime
 import os
+import json
 from agent import WorkflowAgent
 
 # Initialize the agent
