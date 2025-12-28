@@ -1,0 +1,371 @@
+{
+  "metadata": {
+    "workflow_name": "University Case Study Request Workflow",
+    "description": "A multi\u2011step approval process for students requesting case study permissions. The process involves a Class Teacher approving or rejecting the request, and if approved, the Dean providing final confirmation. Timed actions and email notifications are built into the workflow.",
+    "version": "1.1",
+    "generated_with": "LLM-Enhanced Workflow Generator",
+    "platform": "Microsoft 365",
+    "modification_history": [
+      {
+        "timestamp": "2024-12-03T00:00:00Z",
+        "changes": []
+      }
+    ]
+  },
+  "user_requirements": {
+    "questions_answered": {
+      "q_1": "no, all the class teacher has to do is look at the information provided by the student and select whether to approve or disapprove of the student's request",
+      "q_2": "no",
+      "q_3": "yes once a request is sent to the class teacher, they have an hour to review it and respond to it else it is sent to the dean who has 24 hours to review it",
+      "q_4": "that is not a concern for the for the workflow.",
+      "q_5": "A conformation email is sent to the student and the class teacher",
+      "q_6": "through email the email id of the student, class teacher, dean will be provided by the student",
+      "q_7": "no"
+    }
+  },
+  "workflow_analysis": {
+    "approval_chain": [
+      {
+        "level": 1,
+        "approver_role": "Class Teacher",
+        "approver_type": "single",
+        "source": "from_form",
+        "conditions": [
+          "Level 1 approver",
+          "Can approve/reject with comments"
+        ],
+        "rejection_behavior": "end_workflow",
+        "notification_rules": [],
+        "timeout_hours": 48
+      },
+      {
+        "level": 2,
+        "approver_role": "Dean",
+        "approver_type": "single",
+        "source": "from_form",
+        "conditions": [
+          "Level 2 approver",
+          "Can approve/reject with comments"
+        ],
+        "rejection_behavior": "end_workflow",
+        "notification_rules": [],
+        "timeout_hours": 48
+      }
+    ],
+    "business_rules": [
+      "Class Teacher must review and respond within 1 hour of submission; if no response, the request is automatically forwarded to the Dean.",
+      "Dean must review and respond within 24 hours of receiving the request; if no response, the request times out.",
+      "If Class Teacher rejects, the workflow ends immediately and the student is notified.",
+      "If Dean rejects, the workflow ends immediately and the student is notified.",
+      "If both Class Teacher and Dean approve, the workflow completes successfully and the student is notified.",
+      "If Class Teacher approves, the request moves to the Dean for final approval.",
+      "All notifications are sent via Outlook email."
+    ],
+    "notifications": [
+      {
+        "trigger": "form_submitted",
+        "recipients": [
+          "student_email",
+          "class_teacher_email"
+        ],
+        "platform": "Outlook",
+        "template": "confirmation"
+      },
+      {
+        "trigger": "class_teacher_approved",
+        "recipients": [
+          "dean_email"
+        ],
+        "platform": "Outlook",
+        "template": "approval_to_dean"
+      },
+      {
+        "trigger": "class_teacher_rejected",
+        "recipients": [
+          "student_email"
+        ],
+        "platform": "Outlook",
+        "template": "rejection_notification"
+      },
+      {
+        "trigger": "dean_approved",
+        "recipients": [
+          "student_email"
+        ],
+        "platform": "Outlook",
+        "template": "final_approval_notification"
+      },
+      {
+        "trigger": "dean_rejected",
+        "recipients": [
+          "student_email"
+        ],
+        "platform": "Outlook",
+        "template": "final_rejection_notification"
+      }
+    ]
+  },
+  "microsoft_forms": {
+    "title": "University Case Study Request Workflow",
+    "description": "A multi\u2011step approval process for students requesting case study permissions. The process involves a Class Teacher approving or rejecting the request, and if approved, the Dean providing final confirmation. Timed actions and email notifications are built into the workflow.",
+    "platform": "Microsoft Forms",
+    "settings": {
+      "one_response_per_user": true,
+      "allow_anonymous": false,
+      "confirmation_message": "Your request has been submitted successfully!"
+    },
+    "questions": [
+      {
+        "id": "q1",
+        "field_name": "submitter_name",
+        "type": "text",
+        "title": "Your Full Name",
+        "required": true,
+        "validation": "string",
+        "purpose": "identification"
+      },
+      {
+        "id": "q2",
+        "field_name": "student_email",
+        "type": "email",
+        "title": "Student Email",
+        "required": true,
+        "validation": "email",
+        "purpose": "contact"
+      },
+      {
+        "id": "q3",
+        "field_name": "class_teacher_email",
+        "type": "email",
+        "title": "Class Teacher Email",
+        "required": true,
+        "validation": "email",
+        "purpose": "contact"
+      },
+      {
+        "id": "q4",
+        "field_name": "dean_email",
+        "type": "email",
+        "title": "Dean Email",
+        "required": true,
+        "validation": "email",
+        "purpose": "contact"
+      },
+      {
+        "id": "q5",
+        "field_name": "request_title",
+        "type": "text",
+        "title": "Request Title",
+        "required": true,
+        "validation": "string",
+        "purpose": "description"
+      },
+      {
+        "id": "q6",
+        "field_name": "request_description",
+        "type": "textarea",
+        "title": "Request Description",
+        "required": true,
+        "validation": "string",
+        "purpose": "description"
+      },
+      {
+        "id": "q7",
+        "field_name": "class_teacher_name",
+        "type": "text",
+        "title": "Class Teacher Name",
+        "required": true,
+        "purpose": "approver_identification"
+      },
+      {
+        "id": "q8",
+        "field_name": "class_teacher_email",
+        "type": "email",
+        "title": "Class Teacher Email",
+        "required": true,
+        "purpose": "approver_contact"
+      },
+      {
+        "id": "q9",
+        "field_name": "dean_name",
+        "type": "text",
+        "title": "Dean Name",
+        "required": true,
+        "purpose": "approver_identification"
+      },
+      {
+        "id": "q10",
+        "field_name": "dean_email",
+        "type": "email",
+        "title": "Dean Email",
+        "required": true,
+        "purpose": "approver_contact"
+      }
+    ]
+  },
+  "excel_tracker": {
+    "table_name": "University_Case_Study_Request_Workflow_Tracker",
+    "platform": "Excel Online (Business)",
+    "location": "SharePoint/Shared Documents",
+    "columns": [
+      {
+        "name": "SubmissionID",
+        "type": "text"
+      },
+      {
+        "name": "SubmissionTimestamp",
+        "type": "datetime"
+      },
+      {
+        "name": "CurrentStatus",
+        "type": "choice",
+        "choices": [
+          "Submitted",
+          "Pending",
+          "Approved",
+          "Rejected"
+        ]
+      },
+      {
+        "name": "submitter_name",
+        "type": "text"
+      },
+      {
+        "name": "student_email",
+        "type": "text"
+      },
+      {
+        "name": "class_teacher_email",
+        "type": "text"
+      },
+      {
+        "name": "dean_email",
+        "type": "text"
+      },
+      {
+        "name": "request_title",
+        "type": "text"
+      },
+      {
+        "name": "request_description",
+        "type": "text"
+      },
+      {
+        "name": "Class_Teacher_Status",
+        "type": "choice",
+        "choices": [
+          "Pending",
+          "Approved",
+          "Rejected"
+        ]
+      },
+      {
+        "name": "Class_Teacher_Name",
+        "type": "text"
+      },
+      {
+        "name": "Class_Teacher_Timestamp",
+        "type": "datetime"
+      },
+      {
+        "name": "Class_Teacher_Comments",
+        "type": "text"
+      },
+      {
+        "name": "Dean_Status",
+        "type": "choice",
+        "choices": [
+          "Pending",
+          "Approved",
+          "Rejected"
+        ]
+      },
+      {
+        "name": "Dean_Name",
+        "type": "text"
+      },
+      {
+        "name": "Dean_Timestamp",
+        "type": "datetime"
+      },
+      {
+        "name": "Dean_Comments",
+        "type": "text"
+      },
+      {
+        "name": "FinalDecision",
+        "type": "choice",
+        "choices": [
+          "Approved",
+          "Rejected"
+        ]
+      },
+      {
+        "name": "FinalDecisionDate",
+        "type": "datetime"
+      }
+    ]
+  },
+  "power_automate_workflow": {
+    "name": "University Case Study Request Workflow",
+    "description": "A multi\u2011step approval process for students requesting case study permissions. The process involves a Class Teacher approving or rejecting the request, and if approved, the Dean providing final confirmation. Timed actions and email notifications are built into the workflow.",
+    "platform": "Microsoft Power Automate",
+    "trigger": {
+      "type": "Microsoft Forms",
+      "operation": "When a new response is submitted",
+      "form_name": "University Case Study Request Workflow"
+    },
+    "steps": [
+      {
+        "step_number": 1,
+        "name": "Get Form Response",
+        "type": "Microsoft Forms - Get response details",
+        "connector": "Microsoft Forms"
+      },
+      {
+        "step_number": 2,
+        "name": "Create Excel Tracking Row",
+        "type": "Excel Online - Add row",
+        "connector": "Excel Online (Business)"
+      },
+      {
+        "step_number": 3,
+        "name": "Send Confirmation Email",
+        "type": "Outlook - Send email",
+        "connector": "Office 365 Outlook"
+      },
+      {
+        "step_number": 4,
+        "name": "Approval - Class Teacher",
+        "type": "Teams - Start approval",
+        "connector": "Microsoft Teams Approvals",
+        "level": 1
+      },
+      {
+        "step_number": 5,
+        "name": "Update Excel - Class Teacher",
+        "type": "Excel Online - Update row",
+        "connector": "Excel Online (Business)"
+      },
+      {
+        "step_number": 6,
+        "name": "Approval - Dean",
+        "type": "Teams - Start approval",
+        "connector": "Microsoft Teams Approvals",
+        "level": 2
+      },
+      {
+        "step_number": 7,
+        "name": "Update Excel - Dean",
+        "type": "Excel Online - Update row",
+        "connector": "Excel Online (Business)"
+      },
+      {
+        "step_number": 8,
+        "name": "Send Final Notification",
+        "type": "Outlook - Send email",
+        "connector": "Office 365 Outlook"
+      }
+    ]
+  }
+}
