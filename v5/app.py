@@ -5,9 +5,11 @@ import datetime
 import os
 import json
 from agent import WorkflowAgent
+from mod_agent import WorkflowModificationAgent
 
-# Initialize the agent
+# Initialize the agents
 agent = WorkflowAgent()
+mod_agent = WorkflowModificationAgent()
 
 app = Flask(__name__)
 DB_PATH = os.path.join(os.path.dirname(__file__), 'database')
@@ -115,34 +117,61 @@ def chat_route(chat_id):
 
 @app.route('/stream/<chat_id>')
 def stream(chat_id):
-    # Get the last user message to process
+    # Get the last user message and the latest workflow status to process
     conn = get_db_connection()
-    last_user_msg = conn.execute('SELECT message FROM chatlog WHERE chatid = ? AND sender = "User" ORDER BY timestamp DESC LIMIT 1', (chat_id,)).fetchone()
+    last_msg_data = conn.execute('SELECT message, workflow_generated FROM chatlog WHERE chatid = ? AND sender = "User" ORDER BY timestamp DESC LIMIT 1', (chat_id,)).fetchone()
     conn.close()
     
-    if not last_user_msg:
+    if not last_msg_data:
         return Response("No message to process", status=400)
+
+    user_message = last_msg_data['message']
+    is_workflow_generated = bool(last_msg_data['workflow_generated'])
 
     def generate():
         try:
-            for update in agent.run_step_stream(last_user_msg['message'], chat_id):
-                if isinstance(update, str):
-                    # Progress update
-                    yield f"data: {json.dumps({'type': 'log', 'content': update})}\n\n"
-                elif isinstance(update, dict) and "final_message" in update:
-                    # Final message
-                    response_text = update['final_message']
-                    sys_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    # Store in DB
-                    conn_sys = get_db_connection()
-                    workflow_exists = os.path.exists(os.path.join(WORKFLOWS_DIR, f"{chat_id}.json"))
-                    conn_sys.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
-                                 (chat_id, response_text, sys_timestamp, 'System', workflow_exists))
-                    conn_sys.commit()
-                    conn_sys.close()
-                    
-                    yield f"data: {json.dumps({'type': 'final', 'content': response_text, 'timestamp': sys_timestamp, 'workflow_generated': workflow_exists})}\n\n"
+            # Select agent based on workflow status
+            if is_workflow_generated:
+                print(f"[LOG] Switching to Modification Agent for chat: {chat_id}")
+                filepath = os.path.join(WORKFLOWS_DIR, f"{chat_id}.json")
+                original_workflow = None
+                if os.path.exists(filepath):
+                    with open(filepath, 'r') as f:
+                        original_workflow = json.load(f)
+                
+                for update in mod_agent.run_step_stream(user_message, chat_id, original_workflow):
+                    if isinstance(update, str):
+                        yield f"data: {json.dumps({'type': 'log', 'content': update})}\n\n"
+                    elif isinstance(update, dict) and "final_message" in update:
+                        response_text = update['final_message']
+                        sys_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        conn_sys = get_db_connection()
+                        # Check for modification file or original
+                        modified_path = os.path.join(WORKFLOWS_DIR, f"{chat_id}_modified.json")
+                        workflow_exists = os.path.exists(modified_path) or os.path.exists(filepath)
+                        
+                        conn_sys.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
+                                     (chat_id, response_text, sys_timestamp, 'System', workflow_exists))
+                        conn_sys.commit()
+                        conn_sys.close()
+                        yield f"data: {json.dumps({'type': 'final', 'content': response_text, 'timestamp': sys_timestamp, 'workflow_generated': workflow_exists})}\n\n"
+            else:
+                print(f"[LOG] Using Generation Agent for chat: {chat_id}")
+                for update in agent.run_step_stream(user_message, chat_id):
+                    if isinstance(update, str):
+                        yield f"data: {json.dumps({'type': 'log', 'content': update})}\n\n"
+                    elif isinstance(update, dict) and "final_message" in update:
+                        response_text = update['final_message']
+                        sys_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        conn_sys = get_db_connection()
+                        workflow_exists = os.path.exists(os.path.join(WORKFLOWS_DIR, f"{chat_id}.json"))
+                        conn_sys.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
+                                     (chat_id, response_text, sys_timestamp, 'System', workflow_exists))
+                        conn_sys.commit()
+                        conn_sys.close()
+                        yield f"data: {json.dumps({'type': 'final', 'content': response_text, 'timestamp': sys_timestamp, 'workflow_generated': workflow_exists})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
 
