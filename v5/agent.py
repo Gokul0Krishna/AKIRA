@@ -1,5 +1,7 @@
 import os
 import json
+import sqlite3
+from datetime import datetime
 from typing import TypedDict, Dict, List, Any
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
@@ -759,6 +761,27 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
             with open(filepath, 'w') as f:
                 json.dump(master_json, f, indent=2)
             print(f"\n[SAVE] Master JSON saved to: {filepath}")
+            
+            # Database Insertion: Log the generated workflow state
+            try:
+                db_path = os.path.join(os.path.dirname(__file__), 'database')
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                
+                workflow_name = metadata.get('workflow_name', metadata.get('workflow_title', 'Unknown Workflow'))
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                cursor.execute('''
+                    INSERT INTO state (chatid, workflow, version, timestamp)
+                    VALUES (?, ?, ?, ?)
+                ''', (chat_id, workflow_name, "0", timestamp))
+                
+                conn.commit()
+                conn.close()
+                print(f"[DB] Workflow state logged for chat_id: {chat_id}")
+            except Exception as db_e:
+                print(f"[ERROR] Failed to log workflow state to database: {db_e}")
+                
         except Exception as e:
             print(f"\n[ERROR] Failed to save JSON file: {e}")
         
@@ -766,7 +789,7 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
         
         return {
             "master_json": master_json,
-            "last_message": f"Workflow Generation Complete!\n\nName: {metadata.get('workflow_name')}\nDescription: {metadata.get('description')}\n\nWorkflow structure is available for viewing."
+            "last_message": f"Workflow Generation Complete!\n\nName: {metadata.get('workflow_name', metadata.get('workflow_title'))}\nDescription: {metadata.get('description')}\n\nWorkflow structure is available for viewing."
         }
 
     def _should_ask_more_questions(self, state: GraphState) -> str:

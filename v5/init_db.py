@@ -19,8 +19,18 @@ cursor.execute('''
     )
 ''')
 
+# Create the state table
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS state (
+        chatid TEXT,
+        workflow TEXT,
+        version TEXT,
+        timestamp TEXT
+    )
+''')
+
 print("Database 'database' created/connected successfully.")
-print("Table 'chatlog' ensured.")
+print("Tables 'chatlog' and 'state' ensured.")
 
 conn.commit()
 conn.close()

@@ -147,9 +147,8 @@ def stream(chat_id):
                         sys_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
                         conn_sys = get_db_connection()
-                        # Check for modification file or original
-                        modified_path = os.path.join(WORKFLOWS_DIR, f"{chat_id}_modified.json")
-                        workflow_exists = os.path.exists(modified_path) or os.path.exists(filepath)
+                        # Check if workflow exists
+                        workflow_exists = os.path.exists(filepath)
                         
                         conn_sys.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
                                      (chat_id, response_text, sys_timestamp, 'System', workflow_exists))

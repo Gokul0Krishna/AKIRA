@@ -1,5 +1,7 @@
 import os
 import json
+import sqlite3
+from datetime import datetime
 from typing import TypedDict, Dict, List, Any
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
@@ -354,17 +356,51 @@ Create a detailed step-by-step modification plan. Return ONLY valid JSON:
     def _display_results(self, state: ModificationState):
         modified_workflow = state.get("modified_workflow", {})
         chat_id = state.get("chat_id", "modified_workflow")
+        metadata = modified_workflow.get("metadata", {})
+        workflow_name = metadata.get("workflow_name", metadata.get("workflow_title", "Unknown Workflow"))
         
-        # Save to file
+        # Save to file (Overwrite original)
         workflows_dir = os.path.join(os.path.dirname(__file__), 'workflows')
         os.makedirs(workflows_dir, exist_ok=True)
-        filepath = os.path.join(workflows_dir, f"{chat_id}_modified.json")
+        filepath = os.path.join(workflows_dir, f"{chat_id}.json")
         
-        with open(filepath, 'w') as f:
-            json.dump(modified_workflow, f, indent=2)
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(modified_workflow, f, indent=2)
+            print(f"\n[SAVE] Modified Workflow saved to: {filepath}")
+            
+            # Database Insertion: Log the updated state with incremented version
+            try:
+                db_path = os.path.join(os.path.dirname(__file__), 'database')
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                
+                # Get the latest version for this chatid
+                cursor.execute("SELECT MAX(CAST(version AS INTEGER)) FROM state WHERE chatid = ?", (chat_id,))
+                max_version_row = cursor.fetchone()
+                
+                new_version = 1
+                if max_version_row and max_version_row[0] is not None:
+                    new_version = max_version_row[0] + 1
+                
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                cursor.execute('''
+                    INSERT INTO state (chatid, workflow, version, timestamp)
+                    VALUES (?, ?, ?, ?)
+                ''', (chat_id, workflow_name, str(new_version), timestamp))
+                
+                conn.commit()
+                conn.close()
+                print(f"[DB] Workflow modification logged (v{new_version}) for chat_id: {chat_id}")
+            except Exception as db_e:
+                print(f"[ERROR] Failed to log modified state to database: {db_e}")
+                
+        except Exception as e:
+            print(f"[ERROR] Failed to save modified JSON: {e}")
             
         return {
-            "last_message": f"Workflow Modification Complete!\n\nVersion: {modified_workflow.get('metadata', {}).get('version')}\nChanges Applied: {len(state.get('changes_applied', []))}\n\nModified structure is available."
+            "last_message": f"Workflow Modification Complete!\n\nVersion: {metadata.get('version')}\nChanges Applied: {len(state.get('changes_applied', []))}\n\nModified structure is saved and updated."
         }
 
     # Helper Modification Methods
