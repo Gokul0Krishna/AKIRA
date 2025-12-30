@@ -232,17 +232,15 @@ def select_version():
             with open(filepath, 'w') as f:
                 f.write(workflow_json)
             
-            # Get max version to increment
-            max_v_row = conn.execute('SELECT MAX(CAST(version AS INTEGER)) FROM state WHERE chatid = ?', (chat_id,)).fetchone()
-            new_version = (max_v_row[0] or 0) + 1
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Linear Versioning: Truncate any history "ahead" of the selected version
+            # This makes the selected version the new 'head'
+            conn.execute('DELETE FROM state WHERE chatid = ? AND CAST(version AS INTEGER) > ?', 
+                         (chat_id, int(version)))
             
-            # Log new state
-            conn.execute('INSERT INTO state (chatid, workflow, version, timestamp) VALUES (?, ?, ?, ?)',
-                         (chat_id, workflow_json, str(new_version), timestamp))
             conn.commit()
             conn.close()
-            return {'status': 'success', 'new_version': new_version}
+            print(f"[DB] History truncated to version {version} for chat: {chat_id}")
+            return {'status': 'success', 'current_version': version}
         except Exception as e:
             conn.close()
             return {'status': 'error', 'message': str(e)}, 500
