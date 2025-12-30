@@ -768,13 +768,13 @@ Include all necessary form fields based on user answers. Return ONLY valid JSON.
                 conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()
                 
-                workflow_name = metadata.get('workflow_name', metadata.get('workflow_title', 'Unknown Workflow'))
+                workflow_json = json.dumps(master_json)
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
                 cursor.execute('''
                     INSERT INTO state (chatid, workflow, version, timestamp)
                     VALUES (?, ?, ?, ?)
-                ''', (chat_id, workflow_name, "0", timestamp))
+                ''', (chat_id, workflow_json, "0", timestamp))
                 
                 conn.commit()
                 conn.close()

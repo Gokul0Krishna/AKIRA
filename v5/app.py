@@ -71,9 +71,24 @@ def index():
 @app.route('/delete/<chat_id>', methods=['POST'])
 def delete_chat(chat_id):
     conn = get_db_connection()
-    conn.execute('DELETE FROM chatlog WHERE chatid = ?', (chat_id,))
-    conn.commit()
-    conn.close()
+    try:
+        # 1. Delete from chatlog
+        conn.execute('DELETE FROM chatlog WHERE chatid = ?', (chat_id,))
+        # 2. Delete from state
+        conn.execute('DELETE FROM state WHERE chatid = ?', (chat_id,))
+        conn.commit()
+        
+        # 3. Delete workflow JSON file
+        filepath = os.path.join(WORKFLOWS_DIR, f"{chat_id}.json")
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            print(f"[LOG] Deleted workflow file: {filepath}")
+            
+    except Exception as e:
+        print(f"[ERROR] Deletion failed for {chat_id}: {e}")
+    finally:
+        conn.close()
+        
     return redirect(url_for('index'))
 
 @app.route('/<chat_id>', methods=['GET', 'POST'])
@@ -107,13 +122,20 @@ def chat_route(chat_id):
     
     # Check if header button should be shown (latest message has workflow_generated=1)
     show_header_btn = False
+    max_version = -1
     if messages:
         latest_msg = messages[-1]
         show_header_btn = bool(latest_msg['workflow_generated'])
         
+        if show_header_btn:
+            # Fetch max version from state table
+            version_row = conn.execute('SELECT MAX(CAST(version AS INTEGER)) FROM state WHERE chatid = ?', (chat_id,)).fetchone()
+            if version_row and version_row[0] is not None:
+                max_version = version_row[0]
+        
     conn.close()
     
-    return render_template('chat.html', chat_id=chat_id, messages=messages, show_header_btn=show_header_btn)
+    return render_template('chat.html', chat_id=chat_id, messages=messages, show_header_btn=show_header_btn, max_version=max_version)
 
 @app.route('/stream/<chat_id>')
 def stream(chat_id):
@@ -184,6 +206,49 @@ def get_json(chat_id):
             data = json.load(f)
         return json.dumps(data)
     return {'error': 'File not found'}, 404
+
+@app.route('/get_versions/<chat_id>')
+def get_versions(chat_id):
+    conn = get_db_connection()
+    versions = conn.execute('SELECT version FROM state WHERE chatid = ? ORDER BY CAST(version AS INTEGER) ASC', (chat_id,)).fetchall()
+    conn.close()
+    return {'versions': [v['version'] for v in versions]}
+
+@app.route('/select_version', methods=['POST'])
+def select_version():
+    data = request.get_json()
+    chat_id = data.get('chat_id')
+    version = data.get('version')
+    
+    conn = get_db_connection()
+    # Get the workflow JSON for the selected version
+    wf_row = conn.execute('SELECT workflow FROM state WHERE chatid = ? AND version = ?', (chat_id, str(version))).fetchone()
+    
+    if wf_row:
+        workflow_json = wf_row['workflow']
+        # Overwrite the file
+        filepath = os.path.join(WORKFLOWS_DIR, f"{chat_id}.json")
+        try:
+            with open(filepath, 'w') as f:
+                f.write(workflow_json)
+            
+            # Get max version to increment
+            max_v_row = conn.execute('SELECT MAX(CAST(version AS INTEGER)) FROM state WHERE chatid = ?', (chat_id,)).fetchone()
+            new_version = (max_v_row[0] or 0) + 1
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Log new state
+            conn.execute('INSERT INTO state (chatid, workflow, version, timestamp) VALUES (?, ?, ?, ?)',
+                         (chat_id, workflow_json, str(new_version), timestamp))
+            conn.commit()
+            conn.close()
+            return {'status': 'success', 'new_version': new_version}
+        except Exception as e:
+            conn.close()
+            return {'status': 'error', 'message': str(e)}, 500
+    
+    conn.close()
+    return {'status': 'error', 'message': 'Version not found'}, 404
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

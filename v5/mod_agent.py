@@ -375,6 +375,8 @@ Create a detailed step-by-step modification plan. Return ONLY valid JSON:
                 conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()
                 
+                workflow_json = json.dumps(modified_workflow)
+                
                 # Get the latest version for this chatid
                 cursor.execute("SELECT MAX(CAST(version AS INTEGER)) FROM state WHERE chatid = ?", (chat_id,))
                 max_version_row = cursor.fetchone()
@@ -388,7 +390,7 @@ Create a detailed step-by-step modification plan. Return ONLY valid JSON:
                 cursor.execute('''
                     INSERT INTO state (chatid, workflow, version, timestamp)
                     VALUES (?, ?, ?, ?)
-                ''', (chat_id, workflow_name, str(new_version), timestamp))
+                ''', (chat_id, workflow_json, str(new_version), timestamp))
                 
                 conn.commit()
                 conn.close()

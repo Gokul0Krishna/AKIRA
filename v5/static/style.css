@@ -451,3 +451,44 @@ h1 {
     background-color: #1e293b !important;
     color: var(--text-color) !important;
 }
+
+/* Version Selector Styles */
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.version-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.35rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.version-selector label,
+.version-label {
+    font-size: 0.8rem;
+    color: var(--secondary-text);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.version-selector select {
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+}
+
+.version-selector select option {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+}

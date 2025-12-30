@@ -22,19 +22,35 @@
         <div class="chat-container card">
             <div class="chat-header">
                 <h2>Chat Session</h2>
-                <button id="header-workflow-btn" class="header-btn"
-                    style="display: {% if show_header_btn %}flex{% else %}none{% endif %};"
-                    onclick="viewWorkflow('{{ chat_id }}')">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path
-                            d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
-                        </path>
-                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                    </svg>
-                    Display Workflow
-                </button>
+                <div class="header-controls">
+                    {% if show_header_btn %}
+                    <div class="version-selector">
+                        {% if max_version == 0 %}
+                        <span class="version-label">Version 0</span>
+                        {% else %}
+                        <label for="version-select">Version</label>
+                        <select id="version-select" onchange="switchVersion(this.value)">
+                            {% for i in range(max_version + 1) %}
+                            <option value="{{ i }}" {% if i==max_version %}selected{% endif %}>{{ i }}</option>
+                            {% endfor %}
+                        </select>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    <button id="header-workflow-btn" class="header-btn"
+                        style="display: {% if show_header_btn %}flex{% else %}none{% endif %};"
+                        onclick="viewWorkflow('{{ chat_id }}')">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path
+                                d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                            </path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
+                        Display Workflow
+                    </button>
+                </div>
             </div>
             <div class="messages-area" id="messages">
                 {% for msg in messages %}
@@ -326,6 +342,36 @@
             if (event.target == modal) {
                 modal.style.display = 'none';
             }
+        }
+
+        function switchVersion(version) {
+            if (!confirm(`Switch to version ${version}? This will create a new version based on its state.`)) {
+                // Reset dropdown to max version
+                document.getElementById('version-select').value = '{{ max_version }}';
+                return;
+            }
+
+            fetch('/select_version', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: '{{ chat_id }}',
+                    version: version
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Refresh the page to show the updated workflow and version list
+                        window.location.reload();
+                    } else {
+                        alert('Error switching version: ' + data.message);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error:', err);
+                    alert('An error occurred while switching versions.');
+                });
         }
     </script>
 </body>

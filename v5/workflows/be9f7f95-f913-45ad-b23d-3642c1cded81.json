@@ -2,9 +2,15 @@
   "metadata": {
     "workflow_name": "University Case Study Request Workflow",
     "description": "A multi\u2011step approval process for students requesting case study permissions. The process involves a Class Teacher approving or rejecting the request, and if approved, the Dean providing final confirmation. Timed actions and email notifications are built into the workflow.",
-    "version": "1.0",
+    "version": "1.1",
     "generated_with": "LLM-Enhanced Workflow Generator",
-    "platform": "Microsoft 365"
+    "platform": "Microsoft 365",
+    "modification_history": [
+      {
+        "timestamp": "2024-12-03T00:00:00Z",
+        "changes": []
+      }
+    ]
   },
   "user_requirements": {
     "questions_answered": {
