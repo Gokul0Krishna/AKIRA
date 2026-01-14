@@ -42,15 +42,24 @@ def index():
         return redirect(url_for('chat_route', chat_id=new_chat_id))
     
     conn = get_db_connection()
-    # Get the latest message for each chatid
+    # Get the latest message for each chatid and the corresponding workflow name if it exists
     query = '''
-        SELECT c1.chatid, c1.message 
+        SELECT c1.chatid, c1.message, s.workflow
         FROM chatlog c1
         JOIN (
             SELECT chatid, MAX(timestamp) as max_ts
             FROM chatlog
             GROUP BY chatid
         ) c2 ON c1.chatid = c2.chatid AND c1.timestamp = c2.max_ts
+        LEFT JOIN (
+            SELECT chatid, workflow
+            FROM state
+            WHERE (chatid, CAST(version AS INTEGER)) IN (
+                SELECT chatid, MAX(CAST(version AS INTEGER))
+                FROM state
+                GROUP BY chatid
+            )
+        ) s ON c1.chatid = s.chatid
         ORDER BY c1.timestamp DESC
     '''
     chats_raw = conn.execute(query).fetchall()
@@ -58,12 +67,22 @@ def index():
     
     chats = []
     for chat in chats_raw:
-        msg = chat['message'] or ""
-        words = msg.split()
-        preview = " ".join(words[:10]) + ("..." if len(words) > 10 else "")
+        chat_name = None
+        if chat['workflow']:
+            try:
+                wf_data = json.loads(chat['workflow'])
+                chat_name = wf_data.get('metadata', {}).get('workflow_name') or wf_data.get('workflow_name')
+            except:
+                pass
+        
+        if not chat_name:
+            msg = chat['message'] or ""
+            words = msg.split()
+            chat_name = " ".join(words[:10]) + ("..." if len(words) > 10 else "")
+            
         chats.append({
             'chatid': chat['chatid'],
-            'preview': preview or f"Chat {chat['chatid'][:8]}"
+            'preview': chat_name or f"Chat {chat['chatid'][:8]}"
         })
         
     return render_template('index.html', chats=chats)
@@ -123,10 +142,26 @@ def chat_route(chat_id):
     # Check if header button should be shown (latest message has workflow_generated=1)
     show_header_btn = False
     max_version = -1
+    workflow_name = "Chat Session"
     if messages:
         latest_msg = messages[-1]
         show_header_btn = bool(latest_msg['workflow_generated'])
         
+        # Fetch workflow name if it exists
+        wf_row = conn.execute('''
+            SELECT workflow FROM state 
+            WHERE chatid = ? 
+            ORDER BY CAST(version AS INTEGER) DESC 
+            LIMIT 1
+        ''', (chat_id,)).fetchone()
+        
+        if wf_row:
+            try:
+                wf_data = json.loads(wf_row['workflow'])
+                workflow_name = wf_data.get('metadata', {}).get('workflow_name') or wf_data.get('workflow_name') or "Chat Session"
+            except:
+                pass
+
         if show_header_btn:
             # Fetch max version from state table
             version_row = conn.execute('SELECT MAX(CAST(version AS INTEGER)) FROM state WHERE chatid = ?', (chat_id,)).fetchone()
@@ -135,7 +170,7 @@ def chat_route(chat_id):
         
     conn.close()
     
-    return render_template('chat.html', chat_id=chat_id, messages=messages, show_header_btn=show_header_btn, max_version=max_version)
+    return render_template('chat.html', chat_id=chat_id, messages=messages, show_header_btn=show_header_btn, max_version=max_version, workflow_name=workflow_name)
 
 @app.route('/stream/<chat_id>')
 def stream(chat_id):
@@ -169,14 +204,17 @@ def stream(chat_id):
                         sys_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
                         conn_sys = get_db_connection()
-                        # Check if workflow exists
-                        workflow_exists = os.path.exists(filepath)
+                        # Check if workflow exists and get its name
+                        workflow_name = None
+                        if os.path.exists(filepath):
+                            try:
+                                with open(filepath, 'r') as f:
+                                    wf_data = json.load(f)
+                                    workflow_name = wf_data.get('metadata', {}).get('workflow_name') or wf_data.get('workflow_name')
+                            except:
+                                pass
                         
-                        conn_sys.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
-                                     (chat_id, response_text, sys_timestamp, 'System', workflow_exists))
-                        conn_sys.commit()
-                        conn_sys.close()
-                        yield f"data: {json.dumps({'type': 'final', 'content': response_text, 'timestamp': sys_timestamp, 'workflow_generated': workflow_exists})}\n\n"
+                        yield f"data: {json.dumps({'type': 'final', 'content': response_text, 'timestamp': sys_timestamp, 'workflow_generated': bool(workflow_name), 'workflow_name': workflow_name})}\n\n"
             else:
                 print(f"[LOG] Using Generation Agent for chat: {chat_id}")
                 for update in agent.run_step_stream(user_message, chat_id):
@@ -187,12 +225,24 @@ def stream(chat_id):
                         sys_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
                         conn_sys = get_db_connection()
-                        workflow_exists = os.path.exists(os.path.join(WORKFLOWS_DIR, f"{chat_id}.json"))
+                        filepath = os.path.join(WORKFLOWS_DIR, f"{chat_id}.json")
+                        workflow_exists = os.path.exists(filepath)
                         conn_sys.execute('INSERT INTO chatlog (chatid, message, timestamp, sender, workflow_generated) VALUES (?, ?, ?, ?, ?)',
                                      (chat_id, response_text, sys_timestamp, 'System', workflow_exists))
                         conn_sys.commit()
                         conn_sys.close()
-                        yield f"data: {json.dumps({'type': 'final', 'content': response_text, 'timestamp': sys_timestamp, 'workflow_generated': workflow_exists})}\n\n"
+
+                        # Get workflow name
+                        workflow_name = None
+                        if workflow_exists:
+                            try:
+                                with open(filepath, 'r') as f:
+                                    wf_data = json.load(f)
+                                    workflow_name = wf_data.get('metadata', {}).get('workflow_name') or wf_data.get('workflow_name')
+                            except:
+                                pass
+
+                        yield f"data: {json.dumps({'type': 'final', 'content': response_text, 'timestamp': sys_timestamp, 'workflow_generated': workflow_exists, 'workflow_name': workflow_name})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
 

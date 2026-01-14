@@ -1,0 +1,469 @@
+{
+  "metadata": {
+    "workflow_name": "Student Case Study Approval Path",
+    "description": "This workflow manages the approval of student case studies. A student submits a case study, which is sequentially reviewed by the class teacher and the head of department. Each approver can approve, reject, or request more information. Notifications are sent to all relevant stakeholders regarding the case study's status.",
+    "version": "1.0",
+    "generated_with": "LLM-Enhanced Workflow Generator",
+    "platform": "Microsoft 365"
+  },
+  "user_requirements": {
+    "questions_answered": {
+      "q_1": "name of student, subject name , srn and faculty name",
+      "q_2": "class teacher receives a teams message about the student requesting a case study, if the class teacher rejects it he needs to provide a reason for it and this is shared to everyone below him in the hierarchy",
+      "q_3": "a notification should say your case study on <subject name> has been approved else if rejected the reason for rejection must also be sent",
+      "q_4": "no",
+      "q_5": "nothing the class teacher my simply have to select from approve or disapprove, and if disapprove is given then there must be the reason for disapproval mentioned",
+      "q_6": "it must be started from beginning again",
+      "q_7": "the approval must skip that person and go to the person who is up in the hierarchy",
+      "q_8": "no",
+      "q_9": "text\nkeep it as simple and short as possible"
+    }
+  },
+  "workflow_analysis": {
+    "approval_chain": [
+      {
+        "level": 1,
+        "approver_role": "Student",
+        "approver_type": "single",
+        "source": "from_form",
+        "conditions": [
+          "Level 1 approver",
+          "Can approve/reject with comments"
+        ],
+        "rejection_behavior": "end_workflow",
+        "notification_rules": [],
+        "timeout_hours": 48
+      },
+      {
+        "level": 2,
+        "approver_role": "Class Teacher",
+        "approver_type": "single",
+        "source": "from_form",
+        "conditions": [
+          "Level 2 approver",
+          "Can approve/reject with comments"
+        ],
+        "rejection_behavior": "end_workflow",
+        "notification_rules": [],
+        "timeout_hours": 48
+      },
+      {
+        "level": 3,
+        "approver_role": "Head Of Department (Hod)",
+        "approver_type": "single",
+        "source": "from_form",
+        "conditions": [
+          "Level 3 approver",
+          "Can approve/reject with comments"
+        ],
+        "rejection_behavior": "end_workflow",
+        "notification_rules": [],
+        "timeout_hours": 48
+      }
+    ],
+    "business_rules": [
+      "Approval must be completed by the next approver within one hour, or the case study will be escalated.",
+      "If a case study is rejected, the reason must be specified and shared with the student and the previous approver.",
+      "If an approver is unavailable, the workflow must skip that approver and proceed to the next in the hierarchy.",
+      "If a case study is rejected at any level, the workflow must restart from the beginning.",
+      "Each approver can provide feedback or comments during the approval process."
+    ],
+    "notifications": [
+      {
+        "trigger": "form_submitted",
+        "recipients": [
+          "submitter",
+          "first_approver"
+        ],
+        "platform": "Teams",
+        "template": "Your case study titled \"{case_study_title}\" in \"{subject_name}\" has been submitted for review."
+      },
+      {
+        "trigger": "rejected_by_class_teacher",
+        "recipients": [
+          "student",
+          "submitter"
+        ],
+        "platform": "Teams",
+        "template": "Your case study titled \"{case_study_title}\" in \"{subject_name}\" has been rejected. Reason: \"{rejection_reason}\"."
+      },
+      {
+        "trigger": "approved_by_class_teacher",
+        "recipients": [
+          "student",
+          "submitter"
+        ],
+        "platform": "Teams",
+        "template": "Your case study titled \"{case_study_title}\" in \"{subject_name}\" has been approved by the class teacher."
+      },
+      {
+        "trigger": "rejected_by_hod",
+        "recipients": [
+          "student",
+          "submitter"
+        ],
+        "platform": "Teams",
+        "template": "Your case study titled \"{case_study_title}\" in \"{subject_name}\" has been rejected by the HOD. Reason: \"{rejection_reason}\"."
+      },
+      {
+        "trigger": "approved_by_hod",
+        "recipients": [
+          "student",
+          "submitter"
+        ],
+        "platform": "Teams",
+        "template": "Your case study titled \"{case_study_title}\" in \"{subject_name}\" has been approved by the HOD."
+      },
+      {
+        "trigger": "escalated",
+        "recipients": [
+          "student",
+          "submitter",
+          "class_teacher",
+          "hod"
+        ],
+        "platform": "Teams",
+        "template": "Your case study titled \"{case_study_title}\" in \"{subject_name}\" has not been responded to within the time limit. Please take appropriate action."
+      }
+    ]
+  },
+  "microsoft_forms": {
+    "title": "Student Case Study Approval Path",
+    "description": "This workflow manages the approval of student case studies. A student submits a case study, which is sequentially reviewed by the class teacher and the head of department. Each approver can approve, reject, or request more information. Notifications are sent to all relevant stakeholders regarding the case study's status.",
+    "platform": "Microsoft Forms",
+    "settings": {
+      "one_response_per_user": true,
+      "allow_anonymous": false,
+      "confirmation_message": "Your request has been submitted successfully!"
+    },
+    "questions": [
+      {
+        "id": "q1",
+        "field_name": "student_name",
+        "type": "text",
+        "title": "Student Name",
+        "required": true,
+        "validation": "string",
+        "purpose": "identification"
+      },
+      {
+        "id": "q2",
+        "field_name": "subject_name",
+        "type": "text",
+        "title": "Subject Name",
+        "required": true,
+        "validation": "string",
+        "purpose": "identification"
+      },
+      {
+        "id": "q3",
+        "field_name": "srn",
+        "type": "text",
+        "title": "SRN",
+        "required": true,
+        "validation": "string",
+        "purpose": "student registration number"
+      },
+      {
+        "id": "q4",
+        "field_name": "faculty_name",
+        "type": "text",
+        "title": "Faculty Name",
+        "required": true,
+        "validation": "string",
+        "purpose": "faculty identification"
+      },
+      {
+        "id": "q5",
+        "field_name": "case_study_title",
+        "type": "text",
+        "title": "Case Study Title",
+        "required": true,
+        "validation": "string",
+        "purpose": "description"
+      },
+      {
+        "id": "q6",
+        "field_name": "case_study_description",
+        "type": "text_area",
+        "title": "Case Study Description",
+        "required": true,
+        "validation": "string",
+        "purpose": "description"
+      },
+      {
+        "id": "q7",
+        "field_name": "attachments",
+        "type": "file",
+        "title": "Attachments",
+        "required": false,
+        "validation": "multiple_files",
+        "purpose": "supporting documents"
+      },
+      {
+        "id": "q8",
+        "field_name": "submitter_name",
+        "type": "text",
+        "title": "Your Full Name",
+        "required": true,
+        "validation": "string",
+        "purpose": "identification"
+      },
+      {
+        "id": "q9",
+        "field_name": "student_name",
+        "type": "text",
+        "title": "Student Name",
+        "required": true,
+        "purpose": "approver_identification"
+      },
+      {
+        "id": "q10",
+        "field_name": "student_email",
+        "type": "email",
+        "title": "Student Email",
+        "required": true,
+        "purpose": "approver_contact"
+      },
+      {
+        "id": "q11",
+        "field_name": "class_teacher_name",
+        "type": "text",
+        "title": "Class Teacher Name",
+        "required": true,
+        "purpose": "approver_identification"
+      },
+      {
+        "id": "q12",
+        "field_name": "class_teacher_email",
+        "type": "email",
+        "title": "Class Teacher Email",
+        "required": true,
+        "purpose": "approver_contact"
+      },
+      {
+        "id": "q13",
+        "field_name": "head_of_department_(hod)_name",
+        "type": "text",
+        "title": "Head Of Department (Hod) Name",
+        "required": true,
+        "purpose": "approver_identification"
+      },
+      {
+        "id": "q14",
+        "field_name": "head_of_department_(hod)_email",
+        "type": "email",
+        "title": "Head Of Department (Hod) Email",
+        "required": true,
+        "purpose": "approver_contact"
+      }
+    ]
+  },
+  "excel_tracker": {
+    "table_name": "Student_Case_Study_Approval_Path_Tracker",
+    "platform": "Excel Online (Business)",
+    "location": "SharePoint/Shared Documents",
+    "columns": [
+      {
+        "name": "SubmissionID",
+        "type": "text"
+      },
+      {
+        "name": "SubmissionTimestamp",
+        "type": "datetime"
+      },
+      {
+        "name": "CurrentStatus",
+        "type": "choice",
+        "choices": [
+          "Submitted",
+          "Pending",
+          "Approved",
+          "Rejected"
+        ]
+      },
+      {
+        "name": "student_name",
+        "type": "text"
+      },
+      {
+        "name": "subject_name",
+        "type": "text"
+      },
+      {
+        "name": "srn",
+        "type": "text"
+      },
+      {
+        "name": "faculty_name",
+        "type": "text"
+      },
+      {
+        "name": "case_study_title",
+        "type": "text"
+      },
+      {
+        "name": "case_study_description",
+        "type": "text"
+      },
+      {
+        "name": "attachments",
+        "type": "text"
+      },
+      {
+        "name": "submitter_name",
+        "type": "text"
+      },
+      {
+        "name": "Student_Status",
+        "type": "choice",
+        "choices": [
+          "Pending",
+          "Approved",
+          "Rejected"
+        ]
+      },
+      {
+        "name": "Student_Name",
+        "type": "text"
+      },
+      {
+        "name": "Student_Timestamp",
+        "type": "datetime"
+      },
+      {
+        "name": "Student_Comments",
+        "type": "text"
+      },
+      {
+        "name": "Class_Teacher_Status",
+        "type": "choice",
+        "choices": [
+          "Pending",
+          "Approved",
+          "Rejected"
+        ]
+      },
+      {
+        "name": "Class_Teacher_Name",
+        "type": "text"
+      },
+      {
+        "name": "Class_Teacher_Timestamp",
+        "type": "datetime"
+      },
+      {
+        "name": "Class_Teacher_Comments",
+        "type": "text"
+      },
+      {
+        "name": "Head_Of_Department_(Hod)_Status",
+        "type": "choice",
+        "choices": [
+          "Pending",
+          "Approved",
+          "Rejected"
+        ]
+      },
+      {
+        "name": "Head_Of_Department_(Hod)_Name",
+        "type": "text"
+      },
+      {
+        "name": "Head_Of_Department_(Hod)_Timestamp",
+        "type": "datetime"
+      },
+      {
+        "name": "Head_Of_Department_(Hod)_Comments",
+        "type": "text"
+      },
+      {
+        "name": "FinalDecision",
+        "type": "choice",
+        "choices": [
+          "Approved",
+          "Rejected"
+        ]
+      },
+      {
+        "name": "FinalDecisionDate",
+        "type": "datetime"
+      }
+    ]
+  },
+  "power_automate_workflow": {
+    "name": "Student Case Study Approval Path",
+    "description": "This workflow manages the approval of student case studies. A student submits a case study, which is sequentially reviewed by the class teacher and the head of department. Each approver can approve, reject, or request more information. Notifications are sent to all relevant stakeholders regarding the case study's status.",
+    "platform": "Microsoft Power Automate",
+    "trigger": {
+      "type": "Microsoft Forms",
+      "operation": "When a new response is submitted",
+      "form_name": "Student Case Study Approval Path"
+    },
+    "steps": [
+      {
+        "step_number": 1,
+        "name": "Get Form Response",
+        "type": "Microsoft Forms - Get response details",
+        "connector": "Microsoft Forms"
+      },
+      {
+        "step_number": 2,
+        "name": "Create Excel Tracking Row",
+        "type": "Excel Online - Add row",
+        "connector": "Excel Online (Business)"
+      },
+      {
+        "step_number": 3,
+        "name": "Send Confirmation Email",
+        "type": "Outlook - Send email",
+        "connector": "Office 365 Outlook"
+      },
+      {
+        "step_number": 4,
+        "name": "Approval - Student",
+        "type": "Teams - Start approval",
+        "connector": "Microsoft Teams Approvals",
+        "level": 1
+      },
+      {
+        "step_number": 5,
+        "name": "Update Excel - Student",
+        "type": "Excel Online - Update row",
+        "connector": "Excel Online (Business)"
+      },
+      {
+        "step_number": 6,
+        "name": "Approval - Class Teacher",
+        "type": "Teams - Start approval",
+        "connector": "Microsoft Teams Approvals",
+        "level": 2
+      },
+      {
+        "step_number": 7,
+        "name": "Update Excel - Class Teacher",
+        "type": "Excel Online - Update row",
+        "connector": "Excel Online (Business)"
+      },
+      {
+        "step_number": 8,
+        "name": "Approval - Head Of Department (Hod)",
+        "type": "Teams - Start approval",
+        "connector": "Microsoft Teams Approvals",
+        "level": 3
+      },
+      {
+        "step_number": 9,
+        "name": "Update Excel - Head Of Department (Hod)",
+        "type": "Excel Online - Update row",
+        "connector": "Excel Online (Business)"
+      },
+      {
+        "step_number": 10,
+        "name": "Send Final Notification",
+        "type": "Outlook - Send email",
+        "connector": "Office 365 Outlook"
+      }
+    ]
+  }
+}

@@ -40,7 +40,7 @@ class WorkflowAgent:
     def __init__(self):
         self.llm_key = os.getenv('llm_key')
         self.model = ChatOpenAI(
-            model="openai/gpt-oss-20b:free",
+            model="allenai/molmo-2-8b:free",
             api_key=self.llm_key,
             base_url="https://openrouter.ai/api/v1",
             temperature=0.7

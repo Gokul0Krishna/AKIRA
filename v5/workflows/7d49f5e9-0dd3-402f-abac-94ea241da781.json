@@ -1,0 +1,143 @@
+{
+  "metadata": {
+    "workflow_name": "",
+    "description": "",
+    "version": "1.0",
+    "generated_with": "LLM-Enhanced Workflow Generator",
+    "platform": "Microsoft 365"
+  },
+  "user_requirements": {
+    "questions_answered": {
+      "q_1": "name,srn,topic,subject,faculty_name"
+    }
+  },
+  "workflow_analysis": {
+    "approval_chain": [],
+    "business_rules": [],
+    "notifications": []
+  },
+  "microsoft_forms": {
+    "title": "Workflow Form",
+    "description": "",
+    "platform": "Microsoft Forms",
+    "settings": {
+      "one_response_per_user": true,
+      "allow_anonymous": false,
+      "confirmation_message": "Your request has been submitted successfully!"
+    },
+    "questions": [
+      {
+        "id": "q1",
+        "field_name": "submitter_name",
+        "type": "text",
+        "title": "Your Full Name",
+        "required": true,
+        "validation": "",
+        "purpose": "user_data"
+      },
+      {
+        "id": "q2",
+        "field_name": "submitter_email",
+        "type": "email",
+        "title": "Your Email",
+        "required": true,
+        "validation": "",
+        "purpose": "user_data"
+      },
+      {
+        "id": "q3",
+        "field_name": "request_details",
+        "type": "textarea",
+        "title": "Request Details",
+        "required": true,
+        "validation": "",
+        "purpose": "user_data"
+      }
+    ]
+  },
+  "excel_tracker": {
+    "table_name": "_Tracker",
+    "platform": "Excel Online (Business)",
+    "location": "SharePoint/Shared Documents",
+    "columns": [
+      {
+        "name": "SubmissionID",
+        "type": "text"
+      },
+      {
+        "name": "SubmissionTimestamp",
+        "type": "datetime"
+      },
+      {
+        "name": "CurrentStatus",
+        "type": "choice",
+        "choices": [
+          "Submitted",
+          "Pending",
+          "Approved",
+          "Rejected"
+        ]
+      },
+      {
+        "name": "submitter_name",
+        "type": "text"
+      },
+      {
+        "name": "submitter_email",
+        "type": "text"
+      },
+      {
+        "name": "request_details",
+        "type": "text"
+      },
+      {
+        "name": "FinalDecision",
+        "type": "choice",
+        "choices": [
+          "Approved",
+          "Rejected"
+        ]
+      },
+      {
+        "name": "FinalDecisionDate",
+        "type": "datetime"
+      }
+    ]
+  },
+  "power_automate_workflow": {
+    "name": "",
+    "description": "",
+    "platform": "Microsoft Power Automate",
+    "trigger": {
+      "type": "Microsoft Forms",
+      "operation": "When a new response is submitted",
+      "form_name": "Workflow Form"
+    },
+    "steps": [
+      {
+        "step_number": 1,
+        "name": "Get Form Response",
+        "type": "Microsoft Forms - Get response details",
+        "connector": "Microsoft Forms"
+      },
+      {
+        "step_number": 2,
+        "name": "Create Excel Tracking Row",
+        "type": "Excel Online - Add row",
+        "connector": "Excel Online (Business)"
+      },
+      {
+        "step_number": 3,
+        "name": "Send Confirmation Email",
+        "type": "Outlook - Send email",
+        "connector": "Office 365 Outlook"
+      },
+      {
+        "step_number": 4,
+        "name": "Send Final Notification",
+        "type": "Outlook - Send email",
+        "connector": "Office 365 Outlook"
+      }
+    ]
+  }
+}

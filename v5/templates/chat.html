@@ -4,15 +4,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat {{ chat_id }}</title>
+    <title>{{ workflow_name }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Mermaid for Flowcharts -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <!-- JSON Editor -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.10.2/jsoneditor.min.css" rel="stylesheet"
         type="text/css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.10.2/jsoneditor.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#f3f0ff',
+                primaryTextColor: '#4b4b4b',
+                primaryBorderColor: '#9d7deb',
+                lineColor: '#666666',
+                secondaryColor: '#f8f9fa',
+                tertiaryColor: '#ffffff'
+            }
+        });
+    </script>
 </head>
 
 <body>
@@ -21,7 +37,7 @@
 
         <div class="chat-container card">
             <div class="chat-header">
-                <h2>Chat Session</h2>
+                <h2>{{ workflow_name }}</h2>
                 <div class="header-controls">
                     {% if show_header_btn %}
                     <div class="version-selector">
@@ -37,6 +53,15 @@
                         {% endif %}
                     </div>
                     {% endif %}
+                    <button id="header-generate-btn" class="header-btn"
+                        style="display: {% if show_header_btn %}flex{% else %}none{% endif %}; background: linear-gradient(135deg, #10b981 0%, #059669 100%); cursor: default;"
+                        onclick="return false;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        Workflow Status: Active
+                    </button>
                     <button id="header-workflow-btn" class="header-btn"
                         style="display: {% if show_header_btn %}flex{% else %}none{% endif %};"
                         onclick="viewWorkflow('{{ chat_id }}')">
@@ -118,7 +143,10 @@
         function submitForm() {
             const content = messageInput.value.trim();
             if (content === '') return;
+            processMessage(content);
+        }
 
+        function processMessage(content) {
             // Add user message to UI immediately
             const ts = new Date().toLocaleString();
             const userMsgDiv = document.createElement('div');
@@ -167,6 +195,16 @@
 
                             if (data.workflow_generated) {
                                 document.getElementById('header-workflow-btn').style.display = 'flex';
+                                document.getElementById('header-generate-btn').style.display = 'flex';
+
+                                // Update Title and Header Name
+                                if (data.workflow_name) {
+                                    document.title = data.workflow_name;
+                                    const headerH2 = document.querySelector('.chat-header h2');
+                                    if (headerH2) headerH2.textContent = data.workflow_name;
+                                }
+                            } else {
+                                document.getElementById('header-generate-btn').style.display = 'none';
                             }
 
                             finalMsgDiv.innerHTML = `<div>${data.content.replace(/\n/g, '<br>')}</div><div class="message-meta">${data.timestamp}</div>`;
